@@ -57,6 +57,23 @@ unlock:
 	return r;
 }
 
+int dmap_con_set_socket(struct dmap_connection *con, struct socket *sock)
+{
+	int r;
+
+	mutex_lock(&con->mutex);
+	if (con->sock) {
+		r = -EEXIST;
+		goto unlock;
+	}
+
+	con->sock = sock;
+	r = 0;
+unlock:
+	mutex_unlock(&con->mutex);
+	return r;
+}
+
 int dmap_con_close(struct dmap_connection *con)
 {
 	mutex_lock(&con->mutex);

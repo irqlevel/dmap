@@ -62,6 +62,8 @@ void dmap_con_deinit(struct dmap_connection *con);
 
 int dmap_con_connect(struct dmap_connection *con, char *host, u16 port);
 
+int dmap_con_set_socket(struct dmap_connection *con, struct socket *sock);
+
 int dmap_con_close(struct dmap_connection *con);
 
 #endif

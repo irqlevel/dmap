@@ -2,9 +2,20 @@
 #define __DMAP_SERVER_H__
 
 #include "dmap-const.h"
+#include "dmap-connection.h"
+
 #include "ksocket.h"
 
 #include <linux/mutex.h>
+
+struct dmap_server_con {
+	struct mutex mutex;
+	struct list_head list;
+	struct task_struct *thread;
+	struct dmap_connection con;
+	bool stopping;
+	u64 id;
+};
 
 struct dmap_server {
 	struct mutex mutex;
@@ -14,6 +25,9 @@ struct dmap_server {
 	struct task_struct *thread;
 	struct socket *sock;
 	bool stopping;
+
+	struct list_head con_list;
+	atomic64_t next_con_id;
 };
 
 int dmap_server_init(struct dmap_server *srv);

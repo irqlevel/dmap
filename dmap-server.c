@@ -1,5 +1,6 @@
 #include "dmap-server.h"
 #include "dmap-trace-helpers.h"
+#include "dmap-malloc.h"
 
 #include <linux/kthread.h>
 #include <linux/delay.h>
@@ -8,7 +9,87 @@ int dmap_server_init(struct dmap_server *srv)
 {
 	memset(srv, 0, sizeof(*srv));
 	mutex_init(&srv->mutex);
+	atomic64_set(&srv->next_con_id, 0);
+	INIT_LIST_HEAD(&srv->con_list);
 	return 0;
+}
+
+static int dmap_server_con_thread(void *data)
+{
+	struct dmap_server_con *con;
+
+	con = (struct dmap_server_con *)data;
+
+	TRACE("con 0x%p id %llu running", con, con->id);
+
+	while (!kthread_should_stop() && !con->stopping)
+		msleep_interruptible(100);
+
+	TRACE("con 0x%p id %llu stopped", con, con->id);
+
+	return 0;
+}
+
+static int dmap_server_con_start(struct dmap_server *srv, struct socket *sock)
+{
+	struct dmap_server_con *con;
+	struct task_struct *thread;
+	int r;
+
+	con = dmap_kzalloc(sizeof(*con), GFP_KERNEL);
+	if (!con)
+		return -ENOMEM;
+
+	r = dmap_con_init(&con->con);
+	if (r)
+		goto free_con;
+
+	con->id = atomic64_inc_return(&srv->next_con_id);
+	mutex_init(&con->mutex);
+	INIT_LIST_HEAD(&con->list);
+
+	thread = kthread_create(dmap_server_con_thread, con, "dmap-con-%llu",
+				con->id);
+	if (IS_ERR(thread)) {
+		r = PTR_ERR(thread);
+		goto deinit_con;
+	}
+
+	r = dmap_con_set_socket(&con->con, sock);
+	if (r)
+		goto del_thread;
+
+	con->thread = thread;
+
+	mutex_lock(&srv->mutex);
+	list_add_tail(&con->list, &srv->con_list);
+	mutex_unlock(&srv->mutex);
+
+	wake_up_process(thread);
+
+	return 0;
+
+del_thread:
+	kthread_stop(thread);
+deinit_con:
+	dmap_con_deinit(&con->con);
+free_con:
+	dmap_kfree(con);
+	return r;
+}
+
+static void dmap_server_con_release(struct dmap_server_con *con)
+{
+	mutex_lock(&con->mutex);
+	if (con->thread) {
+		con->stopping = true;
+		kthread_stop(con->thread);
+		con->thread = NULL;
+		dmap_con_deinit(&con->con);
+		con->stopping = false;
+	}
+	mutex_unlock(&con->mutex);
+	dmap_kfree(con);
 }
 
 static int dmap_server_thread(void *data)
@@ -18,6 +99,8 @@ static int dmap_server_thread(void *data)
 	int r;
 
 	srv = (struct dmap_server *)data;
+	TRACE("server 0x%p running", srv);
+
 	while (!kthread_should_stop() && !srv->stopping) {
 
 		TRACE("accepting");
@@ -30,8 +113,14 @@ static int dmap_server_thread(void *data)
 
 		TRACE("accepted");
 
-		ksock_release(sock);
+		r = dmap_server_con_start(srv, sock);
+		if (r) {
+			TRACE_ERR(r, "connection start failed");
+			ksock_release(sock);
+		}
 	}
+
+	TRACE("server 0x%p stopped", srv);
 
 	return 0;
 }
@@ -44,6 +133,11 @@ int dmap_server_start(struct dmap_server *srv, char *host, int port)
 	int i;
 
 	mutex_lock(&srv->mutex);
+	if (srv->thread) {
+		r = -EEXIST;
+		goto unlock;
+	}
+
 	snprintf(srv->host, ARRAY_SIZE(srv->host), "%s", host);
 	srv->port = port;
 
@@ -69,9 +163,10 @@ int dmap_server_start(struct dmap_server *srv, char *host, int port)
 		goto release_sock;
 	}
 
-	get_task_struct(thread);
 	srv->thread = thread;
 	srv->sock = sock;
+	INIT_LIST_HEAD(&srv->con_list);
+
 	wake_up_process(thread);
 	r = 0;
 	goto unlock;
@@ -85,6 +180,7 @@ unlock:
 
 int dmap_server_stop(struct dmap_server *srv)
 {
+	struct dmap_server_con *con, *tmp;
 	int r;
 
 	mutex_lock(&srv->mutex);
@@ -92,10 +188,15 @@ int dmap_server_stop(struct dmap_server *srv)
 		srv->stopping = true;
 		ksock_abort_accept(srv->sock);
 		kthread_stop(srv->thread);
-		put_task_struct(srv->thread);
 		srv->thread = NULL;
 		ksock_release(srv->sock);
 		srv->sock = NULL;
+
+		list_for_each_entry_safe(con, tmp, &srv->con_list, list) {
+			list_del_init(&con->list);
+			dmap_server_con_release(con);
+		}
+
 		srv->stopping = false;
 		r = 0;
 	} else
