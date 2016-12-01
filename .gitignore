@@ -1,0 +1,12 @@
+temp/
+.tmp_versions/
+*.ko
+*.cmd
+*.o
+*.mod.c
+*.symvers
+*.order
+*.patch
+*.swp
+*.out
+tags
