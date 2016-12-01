@@ -1,13 +1,16 @@
 #include "dmap-connection.h"
 #include "ksocket.h"
 #include "dmap-trace-helpers.h"
+#include "dmap-malloc.h"
+
+#include <linux/gfp.h>
 
 int dmap_con_init(struct dmap_connection *con)
 {
 	TRACE("con 0x%p init", con);
 
 	memset(con, 0, sizeof(*con));
-	init_rwsem(&con->rw_sem);
+	mutex_init(&con->mutex);
 
 	return 0;
 }
@@ -22,7 +25,7 @@ int dmap_con_connect(struct dmap_connection *con, char *host, u16 port)
 	int r;
 	struct socket *sock;
 
-	down_write(&con->rw_sem);
+	mutex_lock(&con->mutex);
 	if (con->sock) {
 		r = -EEXIST;
 		goto unlock;
@@ -50,20 +53,20 @@ int dmap_con_connect(struct dmap_connection *con, char *host, u16 port)
 release_sock:
 	ksock_release(sock);
 unlock:
-	up_write(&con->rw_sem);
+	mutex_unlock(&con->mutex);
 	return r;
 }
 
 int dmap_con_close(struct dmap_connection *con)
 {
-	down_write(&con->rw_sem);
+	mutex_lock(&con->mutex);
 	if (con->sock) {
 		ksock_release(con->sock);
 		con->sock = NULL;
 		con->host[0] = '\0';
 		con->port = 0;
 	}
-	up_write(&con->rw_sem);
+	mutex_unlock(&con->mutex);
 	return 0;
 }
 

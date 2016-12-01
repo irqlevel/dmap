@@ -21,6 +21,7 @@
 #include "dmap-trace-helpers.h"
 #include "dmap-malloc-checker.h"
 #include "dmap-helpers.h"
+#include "dmap-malloc.h"
 
 static struct dmap global_dmap;
 
@@ -28,17 +29,26 @@ static int dmap_init(struct dmap *map)
 {
 	int r;
 
-	r = dmap_sysfs_init(&map->kobj_holder, fs_kobj, &dmap_ktype,
-			    "%s", "dmap");
+	r = dmap_server_init(&map->server);
 	if (r)
 		return r;
 
+	r = dmap_sysfs_init(&map->kobj_holder, fs_kobj, &dmap_ktype,
+			    "%s", "dmap");
+	if (r)
+		goto deinit_server;
+
 	return 0;
+
+deinit_server:
+	dmap_server_deinit(&map->server);
+	return r;
 }
 
 static void dmap_deinit(struct dmap *map)
 {
 	dmap_sysfs_deinit(&map->kobj_holder);
+	dmap_server_deinit(&map->server);
 }
 
 static struct dmap *get_dmap(void)

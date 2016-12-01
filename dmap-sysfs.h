@@ -3,7 +3,12 @@
 
 #include <linux/sysfs.h>
 #include <linux/kobject.h>
-#include "dmap.h"
+
+struct dmap_kobject_holder {
+	struct kobject kobj;
+	struct completion completion;
+	atomic_t deiniting;
+};
 
 extern struct kobj_type dmap_ktype;
 

@@ -1,4 +1,6 @@
 #include "dmap-sysfs.h"
+#include "dmap.h"
+#include "dmap-server.h"
 
 #include <linux/sysfs.h>
 
@@ -60,26 +62,76 @@ void dmap_sysfs_deinit(struct dmap_kobject_holder *holder)
 	}
 }
 
-static ssize_t dmap_attr_add_neigh_store(struct dmap *dmap,
+static ssize_t dmap_attr_start_server_store(struct dmap *map,
+					const char *buf, size_t count)
+{
+	char host[DMAP_PARAM_SIZE];
+	int r, port;
+
+	r = sscanf(buf, DMAP_PARAM_FMT" %d", host, &port);
+	if (r != 2)
+		return -EINVAL;
+
+	r = dmap_server_start(&map->server, host, port);
+	if (r)
+		return r;
+
+	return count;
+}
+
+static ssize_t dmap_attr_start_server_show(struct dmap *map,
+				     char *buf)
+{
+	snprintf(buf, PAGE_SIZE, "\n");
+	return strlen(buf);
+}
+
+static ssize_t dmap_attr_stop_server_store(struct dmap *map,
+					const char *buf, size_t count)
+{
+	int r;
+
+	r = dmap_server_stop(&map->server);
+	if (r)
+		return r;
+
+	return count;
+}
+
+static ssize_t dmap_attr_stop_server_show(struct dmap *map,
+				     char *buf)
+{
+	snprintf(buf, PAGE_SIZE, "\n");
+	return strlen(buf);
+}
+
+static ssize_t dmap_attr_server_show(struct dmap *map,
+				     char *buf)
+{
+	snprintf(buf, PAGE_SIZE, "%s:%d\n", map->server.host, map->server.port);
+	return strlen(buf);
+}
+
+static ssize_t dmap_attr_add_neigh_store(struct dmap *map,
 					  const char *buf, size_t count)
 {
 	return -EINVAL;
 }
 
-static ssize_t dmap_attr_add_neigh_show(struct dmap *dmap,
+static ssize_t dmap_attr_add_neigh_show(struct dmap *map,
 					 char *buf)
 {
 	snprintf(buf, PAGE_SIZE, "\n");
 	return strlen(buf);
 }
 
-static ssize_t dmap_attr_remove_neigh_store(struct dmap *dmap,
+static ssize_t dmap_attr_remove_neigh_store(struct dmap *map,
 					  const char *buf, size_t count)
 {
 	return -EINVAL;
 }
 
-static ssize_t dmap_attr_remove_neigh_show(struct dmap *dmap,
+static ssize_t dmap_attr_remove_neigh_show(struct dmap *map,
 					 char *buf)
 {
 	snprintf(buf, PAGE_SIZE, "\n");
@@ -91,17 +143,17 @@ static ssize_t dmap_attr_show(struct kobject *kobj,
 				char *page)
 {
 	struct dmap_sysfs_attr *vattr;
-	struct dmap *dmap;
+	struct dmap *map;
 
 	vattr = container_of(attr, struct dmap_sysfs_attr, attr);
 	if (!vattr->show)
 		return -EIO;
 
-	dmap = dmap_from_kobject(kobj);
-	if (!dmap)
+	map = dmap_from_kobject(kobj);
+	if (!map)
 		return -EIO;
 
-	return vattr->show(dmap, page);
+	return vattr->show(map, page);
 }
 
 static ssize_t dmap_attr_store(struct kobject *kobj,
@@ -109,23 +161,29 @@ static ssize_t dmap_attr_store(struct kobject *kobj,
 				const char *page, size_t count)
 {
 	struct dmap_sysfs_attr *vattr;
-	struct dmap *dmap;
+	struct dmap *map;
 
 	vattr = container_of(attr, struct dmap_sysfs_attr, attr);
 	if (!vattr->store)
 		return -EIO;
 
-	dmap = dmap_from_kobject(kobj);
-	if (!dmap)
+	map = dmap_from_kobject(kobj);
+	if (!map)
 		return -EIO;
 
-	return vattr->store(dmap, page, count);
+	return vattr->store(map, page, count);
 }
 
+static DMAP_ATTR_RW(start_server);
+static DMAP_ATTR_RW(stop_server);
+static DMAP_ATTR_RO(server);
 static DMAP_ATTR_RW(add_neigh);
 static DMAP_ATTR_RW(remove_neigh);
 
 static struct attribute *dmap_attrs[] = {
+	&dmap_attr_start_server.attr,
+	&dmap_attr_stop_server.attr,
+	&dmap_attr_server.attr,
 	&dmap_attr_add_neigh.attr,
 	&dmap_attr_remove_neigh.attr,
 	NULL,
