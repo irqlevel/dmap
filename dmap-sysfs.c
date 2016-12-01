@@ -1,6 +1,7 @@
 #include "dmap-sysfs.h"
 #include "dmap.h"
 #include "dmap-server.h"
+#include "dmap-neighbor.h"
 
 #include <linux/sysfs.h>
 
@@ -112,29 +113,81 @@ static ssize_t dmap_attr_server_show(struct dmap *map,
 	return strlen(buf);
 }
 
-static ssize_t dmap_attr_add_neigh_store(struct dmap *map,
+static ssize_t dmap_attr_add_neighbor_store(struct dmap *map,
 					  const char *buf, size_t count)
 {
-	return -EINVAL;
+	char host[DMAP_PARAM_SIZE];
+	int r, port;
+
+	r = sscanf(buf, DMAP_PARAM_FMT" %d", host, &port);
+	if (r != 2)
+		return -EINVAL;
+
+	r = dmap_add_neighbor(map, host, port);
+	if (r)
+		return r;
+
+	return count;
 }
 
-static ssize_t dmap_attr_add_neigh_show(struct dmap *map,
+static ssize_t dmap_attr_add_neighbor_show(struct dmap *map,
 					 char *buf)
 {
 	snprintf(buf, PAGE_SIZE, "\n");
 	return strlen(buf);
 }
 
-static ssize_t dmap_attr_remove_neigh_store(struct dmap *map,
+static ssize_t dmap_attr_remove_neighbor_store(struct dmap *map,
 					  const char *buf, size_t count)
 {
-	return -EINVAL;
+	char host[DMAP_PARAM_SIZE];
+	int r;
+
+	r = sscanf(buf, DMAP_PARAM_FMT, host);
+	if (r != 1)
+		return -EINVAL;
+
+	r = dmap_remove_neighbor(map, host);
+	if (r)
+		return r;
+
+	return count;
 }
 
-static ssize_t dmap_attr_remove_neigh_show(struct dmap *map,
+static ssize_t dmap_attr_remove_neighbor_show(struct dmap *map,
 					 char *buf)
 {
 	snprintf(buf, PAGE_SIZE, "\n");
+	return strlen(buf);
+}
+
+static ssize_t dmap_attr_neighbors_show(struct dmap *map,
+					 char *buf)
+{
+	struct dmap_neighbor *curr;
+	int n, off, r;
+
+	r = 0;
+	off = 0;
+	down_read(&map->rw_sem);
+	list_for_each_entry(curr, &map->neighbor_list, list) {
+		if (off >= PAGE_SIZE) {
+			r = -ENOMEM;
+			break;
+		}
+		n = snprintf((char *)buf + off, PAGE_SIZE - off, "%s:%d\n",
+			curr->host, curr->port);
+		if (n <= 0) {
+			r = -ENOMEM;
+			break;
+		}
+		off += n;
+	}
+	up_read(&map->rw_sem);
+
+	if (r)
+		return r;
+
 	return strlen(buf);
 }
 
@@ -177,15 +230,17 @@ static ssize_t dmap_attr_store(struct kobject *kobj,
 static DMAP_ATTR_RW(start_server);
 static DMAP_ATTR_RW(stop_server);
 static DMAP_ATTR_RO(server);
-static DMAP_ATTR_RW(add_neigh);
-static DMAP_ATTR_RW(remove_neigh);
+static DMAP_ATTR_RW(add_neighbor);
+static DMAP_ATTR_RW(remove_neighbor);
+static DMAP_ATTR_RO(neighbors);
 
 static struct attribute *dmap_attrs[] = {
 	&dmap_attr_start_server.attr,
 	&dmap_attr_stop_server.attr,
 	&dmap_attr_server.attr,
-	&dmap_attr_add_neigh.attr,
-	&dmap_attr_remove_neigh.attr,
+	&dmap_attr_add_neighbor.attr,
+	&dmap_attr_remove_neighbor.attr,
+	&dmap_attr_neighbors.attr,
 	NULL,
 };
 

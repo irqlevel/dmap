@@ -22,12 +22,16 @@
 #include "dmap-malloc-checker.h"
 #include "dmap-helpers.h"
 #include "dmap-malloc.h"
+#include "dmap-neighbor.h"
 
 static struct dmap global_dmap;
 
 static int dmap_init(struct dmap *map)
 {
 	int r;
+
+	init_rwsem(&map->rw_sem);
+	INIT_LIST_HEAD(&map->neighbor_list);
 
 	r = dmap_server_init(&map->server);
 	if (r)
@@ -47,13 +51,70 @@ deinit_server:
 
 static void dmap_deinit(struct dmap *map)
 {
+	struct dmap_neighbor *curr, *tmp;
+
 	dmap_sysfs_deinit(&map->kobj_holder);
 	dmap_server_deinit(&map->server);
+
+	down_write(&map->rw_sem);
+	list_for_each_entry_safe(curr, tmp, &map->neighbor_list, list) {
+		list_del_init(&curr->list);
+		dmap_neighbor_put(curr);
+	}
+	up_write(&map->rw_sem);
 }
 
 static struct dmap *get_dmap(void)
 {
 	return &global_dmap;
+}
+
+int dmap_add_neighbor(struct dmap *map, char *host, int port)
+{
+	struct dmap_neighbor *new, *curr;
+	int r;
+
+	new = dmap_neighbor_create(host, port);
+	if (!new)
+		return -ENOMEM;
+
+	down_write(&map->rw_sem);
+	r = 0;
+	list_for_each_entry(curr, &map->neighbor_list, list) {
+		if (strncmp(curr->host, host, strlen(curr->host) + 1) == 0) {
+			r = -EEXIST;
+			break;
+		}
+	}
+	if (!r) {
+		dmap_neighbor_get(new);
+		list_add_tail(&new->list, &map->neighbor_list);
+	}
+	up_write(&map->rw_sem);
+	dmap_neighbor_put(new);
+
+	return r;
+}
+
+int dmap_remove_neighbor(struct dmap *map, char *host)
+{
+	struct dmap_neighbor *found, *curr, *tmp;
+
+	found = NULL;
+	down_write(&map->rw_sem);
+	list_for_each_entry_safe(curr, tmp, &map->neighbor_list, list) {
+		if (strncmp(curr->host, host, strlen(curr->host) + 1) == 0) {
+			found = curr;
+			list_del_init(&found->list);
+			break;
+		}
+	}
+	up_write(&map->rw_sem);
+
+	if (found)
+		dmap_neighbor_put(found);
+
+	return (found) ? 0 : -ENOTTY;
 }
 
 void *dmap_kzalloc(size_t size, gfp_t flags)
