@@ -1,6 +1,8 @@
 #include "dmap-server.h"
 #include "dmap-trace-helpers.h"
 #include "dmap-malloc.h"
+#include "dmap.h"
+#include "dmap-handler.h"
 
 #include <linux/kthread.h>
 #include <linux/delay.h>
@@ -17,14 +19,40 @@ int dmap_server_init(struct dmap_server *srv)
 static int dmap_server_con_thread(void *data)
 {
 	struct dmap_server_con *con;
+	struct dmap_server *srv;
+	struct dmap *map;
+	u32 type, len, result;
+	int r;
 
 	con = (struct dmap_server_con *)data;
+	srv = con->srv;
+	map = container_of(srv, struct dmap, server);
 
 	TRACE("con 0x%p id %llu running", con, con->id);
 
-	while (!kthread_should_stop() && !con->stopping)
-		msleep_interruptible(100);
+	while (!kthread_should_stop() && !con->stopping) {
+		r = dmap_con_recv(&con->con, &con->request,
+				  &type, &len, &result);
+		if (r) {
+			TRACE_ERR(r, "con 0x%p id %llu recv failed",
+				  con, con->id);
+			break;
+		}
 
+		if (kthread_should_stop() || con->stopping)
+			break;
+
+		result = dmap_handle_request(map, type, con->request.body, len,
+					     con->response.body, &len);
+
+		r = dmap_con_send(&con->con, type, len, result,
+				  &con->response);
+		if (r) {
+			TRACE_ERR(r, "con 0x%p id %llu send failed",
+				  con, con->id);
+			break;
+		}
+	}
 	TRACE("con 0x%p id %llu stopped", con, con->id);
 
 	return 0;

@@ -87,120 +87,94 @@ int dmap_con_close(struct dmap_connection *con)
 	return 0;
 }
 
-static int __dmap_send_req(struct dmap_connection *con, u32 type, u32 len,
-			    void *req)
+int dmap_con_send(struct dmap_connection *con, u32 type, u32 len,
+		  u32 result, struct dmap_packet *packet)
 {
-	struct dmap_req_header *header;
-	u32 wrote;
 	int r;
 
-	header = req;
-	if (len < sizeof(*header))
-		return -EINVAL;
-
-	if (len > DMAP_REQ_BODY_MAX)
-		return -EINVAL;
-
-	header->magic = cpu_to_le32(DMAP_REQ_MAGIC);
-	header->len = cpu_to_le32(len);
-	header->type = cpu_to_le32(type);
-
-	r = ksock_send(con->sock, req, len);
-	if (r < 0)
-		return r;
-	wrote = r;
-
-	if (wrote != len)
-		return -EIO;
-
-	return 0;
-}
-
-static int dmap_send_req(struct dmap_connection *con,
-			  struct dmap_req_header *req)
-{
-	u32 wrote;
-	int r;
-
-	r = ksock_send(con->sock, req, le32_to_cpu(req->len));
-	if (r < 0)
-		return r;
-	wrote = r;
-
-	if (wrote != le32_to_cpu(req->len))
-		return -EIO;
-
-	return 0;
-}
-
-static int __dmap_recv_resp(struct dmap_connection *con, u32 type, u32 len,
-			     void *body)
-{
-	struct dmap_resp_header header;
-	u32 read;
-	u32 llen, ltype, lresult;
-	int r;
-
-	r = ksock_recv(con->sock, (unsigned char *)&header,
-			     sizeof(header));
-	if (r < 0)
-		return r;
-	read = r;
-
-	if (read != sizeof(header))
-		return -EIO;
-
-	if (le32_to_cpu(header.magic) != DMAP_RESP_MAGIC)
-		return -EINVAL;
-
-	ltype = le32_to_cpu(header.type);
-	llen = le32_to_cpu(header.len);
-	lresult = le32_to_cpu(header.result);
-
-	if (llen > DMAP_RESP_BODY_MAX)
-		return -EINVAL;
-	if (llen < sizeof(header))
-		return -EINVAL;
-	llen -= sizeof(header);
-	if (type != ltype)
-		return -EINVAL;
-	if (llen != 0) {
-		if (llen != len)
-			return -EINVAL;
-
-		r = ksock_recv(con->sock, body, llen);
-		if (r < 0)
-			return r;
-		read = r;
-		if (read != llen) {
-			r = -EIO;
-			TRACE_ERR(r, "incomplete read %d llen %d", read, len);
-			return r;
-		}
-	} else {
-		/* in this case lresult should be != 0 */
-		if (lresult == 0)
-			lresult = -EINVAL;
+	mutex_lock(&con->mutex);
+	if (!con->sock) {
+		r = -EBADF;
+		goto unlock;
 	}
 
-	return lresult;
+	if (len > sizeof(packet->body)) {
+		r = -EINVAL;
+		goto unlock;
+	}
+
+	packet->header.magic = cpu_to_le32(DMAP_PACKET_MAGIC);
+	packet->header.len = cpu_to_le32(len);
+	packet->header.type = cpu_to_le32(type);
+	packet->header.result = cpu_to_le32(result);
+
+	r = ksock_send(con->sock, packet, sizeof(packet->header) + len);
+	if (r < 0)
+		goto unlock;
+
+	if (r != (sizeof(packet->header) + len)) {
+		r = -EIO;
+		goto unlock;
+	}
+
+	r = 0;
+
+unlock:
+	mutex_unlock(&con->mutex);
+	return r;
 }
 
-static int dmap_recv_resp(struct dmap_connection *con, u32 type, u32 len,
-			   void **body)
+int dmap_con_recv(struct dmap_connection *con, struct dmap_packet *packet,
+		  u32 *type, u32 *len, u32 *result)
 {
-	void *lbody;
 	int r;
+	u32 magic, ltype, llen, lresult;
 
-	lbody = dmap_kmalloc(len, GFP_KERNEL);
-	if (!lbody)
-		return -ENOMEM;
-
-	r = __dmap_recv_resp(con, type, len, lbody);
-	if (r) {
-		dmap_kfree(lbody);
-		return r;
+	mutex_lock(&con->mutex);
+	if (!con->sock) {
+		r = -EBADF;
+		goto unlock;
 	}
-	*body = lbody;
-	return 0;
+
+	r = ksock_recv(con->sock, &packet->header, sizeof(packet->header));
+	if (r < 0)
+		goto unlock;
+
+	if (r != sizeof(packet->header)) {
+		r = -EIO;
+		goto unlock;
+	}
+
+	magic = le32_to_cpu(packet->header.magic);
+	ltype = le32_to_cpu(packet->header.type);
+	llen = le32_to_cpu(packet->header.len);
+	lresult = le32_to_cpu(packet->header.result);
+
+	if (magic != DMAP_PACKET_MAGIC) {
+		r = -EBADF;
+		goto unlock;
+	}
+
+	if (llen > sizeof(packet->body)) {
+		r = -EBADF;
+		goto unlock;
+	}
+
+	r = ksock_recv(con->sock, packet->body, llen);
+	if (r < 0)
+		goto unlock;
+
+	if (r != llen) {
+		r = -EIO;
+		goto unlock;
+	}
+
+	*type = ltype;
+	*len = llen;
+	*result = lresult;
+	r = 0;
+
+unlock:
+	mutex_unlock(&con->mutex);
+	return r;
 }

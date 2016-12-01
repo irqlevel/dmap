@@ -4,24 +4,26 @@
 #include "dmap-const.h"
 #include <linux/mutex.h>
 
-#define DMAP_REQ_MAGIC		0xCBEECBEE
-#define DMAP_RESP_MAGIC		0xCBDACBDA
+#define DMAP_PACKET_MAGIC	0xCBEECBEE
 
-#define DMAP_REQ_BODY_MAX	65536
-#define DMAP_RESP_BODY_MAX	65536
+#define DMAP_PACKET_BODY_SIZE	65520
 
-struct dmap_req_header {
-	__le32 magic;
-	__le32 type;
-	__le32 len;
-	__le32 padding;
-};
+#define DMAP_PACKET_SET_KEY	1
+#define DMAP_PACKET_GET_KEY	2
+#define DMAP_PACKET_DEL_KEY	3
+#define DMAP_PACKET_HELLO	4
+#define DMAP_PACKET_PING	5
 
-struct dmap_resp_header {
+struct dmap_packet_header {
 	__le32 magic;
 	__le32 type;
 	__le32 len;
 	__le32 result;
+};
+
+struct dmap_packet {
+	struct dmap_packet_header header;
+	char body[DMAP_PACKET_BODY_SIZE];
 };
 
 struct dmap_req_set_key {
@@ -49,6 +51,24 @@ struct dmap_resp_del_key {
 	__le64 padding;
 };
 
+struct dmap_req_hello {
+	char host[DMAP_HOST_SIZE];
+	int port;
+};
+
+struct dmap_resp_hello {
+	char host[DMAP_HOST_SIZE];
+	int port;
+};
+
+struct dmap_req_ping {
+	__le64 padding;
+};
+
+struct dmap_resp_ping {
+	__le64 padding;
+};
+
 struct dmap_connection {
 	struct mutex mutex;
 	struct socket *sock;
@@ -65,5 +85,11 @@ int dmap_con_connect(struct dmap_connection *con, char *host, u16 port);
 int dmap_con_set_socket(struct dmap_connection *con, struct socket *sock);
 
 int dmap_con_close(struct dmap_connection *con);
+
+int dmap_con_send(struct dmap_connection *con, u32 type, u32 len,
+		  u32 result, struct dmap_packet *packet);
+
+int dmap_con_recv(struct dmap_connection *con, struct dmap_packet *packet,
+		  u32 *type, u32 *len, u32 *result);
 
 #endif

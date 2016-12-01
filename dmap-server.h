@@ -8,11 +8,16 @@
 
 #include <linux/mutex.h>
 
+struct dmap_server;
+
 struct dmap_server_con {
+	struct dmap_server *srv;
 	struct mutex mutex;
 	struct list_head list;
 	struct task_struct *thread;
 	struct dmap_connection con;
+	struct dmap_packet request;
+	struct dmap_packet response;
 	bool stopping;
 	u64 id;
 };
