@@ -551,3 +551,72 @@ release_sock:
 	sock_release(sock);
 	return r;
 }
+
+int ksock_create_host(struct socket **sockp, char *host, int port)
+{
+	struct sockaddr_storage addr;
+	struct sockaddr_in *in4 = (struct sockaddr_in *)&addr;
+	struct sockaddr_in6 *in6 = (struct sockaddr_in6 *)&addr;
+	struct socket		*sock = NULL;
+	int			error;
+	int			option;
+	mm_segment_t		oldmm = get_fs();
+
+	error = ksock_pton(host, strlen(host), &addr);
+	if (error) {
+		error = ksock_dns_resolve(host, &addr);
+		if (error)
+			return error;
+	}
+
+	error = sock_create(addr.ss_family, SOCK_STREAM, 0, &sock);
+	if (error)
+		return error;
+
+	set_fs(KERNEL_DS);
+	option = 1;
+	error = sock_setsockopt(sock, SOL_SOCKET, SO_REUSEADDR,
+		(char *)&option, sizeof(option));
+	set_fs(oldmm);
+
+	if (error)
+		goto out_sock_release;
+
+	ksock_addr_set_port(&addr, port);
+
+	error = sock->ops->bind(sock, (struct sockaddr *)&addr,
+		(addr.ss_family == AF_INET) ? sizeof(*in4) : sizeof(*in6));
+
+	if (error == -EADDRINUSE)
+		goto out_sock_release;
+
+	if (error)
+		goto out_sock_release;
+
+	*sockp = sock;
+	return 0;
+
+out_sock_release:
+	sock_release(sock);
+	return error;
+}
+
+int ksock_listen_host(struct socket **sockp, char *host, int port, int backlog)
+{
+	int error;
+	struct socket *sock = NULL;
+
+	error = ksock_create_host(&sock, host, port);
+	if (error)
+		return error;
+
+	error = sock->ops->listen(sock, backlog);
+	if (error)
+		goto out;
+
+	*sockp = sock;
+	return 0;
+out:
+	sock_release(sock);
+	return error;
+}

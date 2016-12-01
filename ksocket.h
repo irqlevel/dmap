@@ -47,4 +47,6 @@ int ksock_set_nodelay(struct socket *sock, bool no_delay);
 
 int ksock_connect_host(struct socket **sockp, char *host, u16 port);
 
+int ksock_listen_host(struct socket **sockp, char *host, int port, int backlog);
+
 #endif
