@@ -191,6 +191,13 @@ static ssize_t dmap_attr_neighbors_show(struct dmap *map,
 	return strlen(buf);
 }
 
+static ssize_t dmap_attr_id_show(struct dmap *map,
+				 char *buf)
+{
+	snprintf(buf, PAGE_SIZE, "%s\n", map->id_str);
+	return strlen(buf);
+}
+
 static ssize_t dmap_attr_show(struct kobject *kobj,
 				struct attribute *attr,
 				char *page)
@@ -233,6 +240,7 @@ static DMAP_ATTR_RO(server);
 static DMAP_ATTR_RW(add_neighbor);
 static DMAP_ATTR_RW(remove_neighbor);
 static DMAP_ATTR_RO(neighbors);
+static DMAP_ATTR_RO(id);
 
 static struct attribute *dmap_attrs[] = {
 	&dmap_attr_start_server.attr,
@@ -241,6 +249,7 @@ static struct attribute *dmap_attrs[] = {
 	&dmap_attr_add_neighbor.attr,
 	&dmap_attr_remove_neighbor.attr,
 	&dmap_attr_neighbors.attr,
+	&dmap_attr_id.attr,
 	NULL,
 };
 

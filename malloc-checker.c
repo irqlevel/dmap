@@ -1,4 +1,4 @@
-#include "dmap-malloc-checker.h"
+#include "malloc-checker.h"
 #include "dmap-helpers.h"
 
 #include <linux/slab.h>

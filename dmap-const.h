@@ -11,4 +11,11 @@
 #define DMAP_PARAM_SIZE	64
 #define DMAP_PARAM_FMT	"%63s"
 
+struct dmap_address {
+	char host[DMAP_HOST_SIZE];
+	unsigned char id[DMAP_ID_SIZE];
+	char id_str[2 * DMAP_ID_SIZE + 1];
+	int port;
+};
+
 #endif

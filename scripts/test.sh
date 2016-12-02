@@ -2,6 +2,7 @@
 
 WDIR=temp
 
+cat /sys/fs/dmap/id
 echo 127.0.0.1 8111 > /sys/fs/dmap/start_server
 cat /sys/fs/dmap/server
 echo bla.com 8111 > /sys/fs/dmap/add_neighbor

@@ -1,15 +1,31 @@
 #include "dmap-handler.h"
+#include "dmap-trace-helpers.h"
 
 static int dmap_handle_hello(struct dmap *map, struct dmap_req_hello *req,
 			     struct dmap_resp_hello *resp)
 {
-	return -EINVAL;
+	TRACE("hello %s:%d %s",
+	      req->source.host, req->source.port, req->source.id_str);
+
+	return 0;
 }
 
 static int dmap_handle_ping(struct dmap *map, struct dmap_req_ping *req,
 			    struct dmap_resp_ping *resp)
 {
-	return -EINVAL;
+	TRACE("ping %s:%d %s",
+	      req->source.host, req->source.port, req->source.id_str);
+
+	return 0;
+}
+
+static int dmap_handle_bye(struct dmap *map, struct dmap_req_bye *req,
+			   struct dmap_resp_bye *resp)
+{
+	TRACE("bye %s:%d %s",
+	      req->source.host, req->source.port, req->source.id_str);
+
+	return 0;
 }
 
 int dmap_handle_request(struct dmap *map, u32 type, void *req_body, u32 req_len,
@@ -46,6 +62,20 @@ int dmap_handle_request(struct dmap *map, u32 type, void *req_body, u32 req_len,
 		*resp_len = sizeof(*resp);
 		break;
 	}
+	case DMAP_PACKET_BYE: {
+		struct dmap_req_bye *req = req_body;
+		struct dmap_resp_bye *resp = resp_body;
+
+		if (req_len != sizeof(*req)) {
+			r = -EINVAL;
+			break;
+		}
+
+		r = dmap_handle_bye(map, req, resp);
+
+		*resp_len = sizeof(*resp);
+		break;
+	}
 	default:
 		r = -EINVAL;
 		break;
@@ -56,5 +86,3 @@ int dmap_handle_request(struct dmap *map, u32 type, void *req_body, u32 req_len,
 
 	return r;
 }
-
-

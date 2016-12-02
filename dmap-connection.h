@@ -13,6 +13,7 @@
 #define DMAP_PACKET_DEL_KEY	3
 #define DMAP_PACKET_HELLO	4
 #define DMAP_PACKET_PING	5
+#define DMAP_PACKET_BYE		6
 
 struct dmap_packet_header {
 	__le32 magic;
@@ -23,12 +24,12 @@ struct dmap_packet_header {
 
 struct dmap_packet {
 	struct dmap_packet_header header;
-	char body[DMAP_PACKET_BODY_SIZE];
+	unsigned char body[DMAP_PACKET_BODY_SIZE];
 };
 
 struct dmap_req_set_key {
-	char key[DMAP_KEY_SIZE];
-	char value[DMAP_VALUE_SIZE];
+	unsigned char key[DMAP_KEY_SIZE];
+	unsigned char value[DMAP_VALUE_SIZE];
 };
 
 struct dmap_resp_set_key {
@@ -36,15 +37,15 @@ struct dmap_resp_set_key {
 };
 
 struct dmap_req_get_key {
-	char key[DMAP_KEY_SIZE];
+	unsigned char key[DMAP_KEY_SIZE];
 };
 
 struct dmap_resp_get_key {
-	char value[DMAP_VALUE_SIZE];
+	unsigned char value[DMAP_VALUE_SIZE];
 };
 
 struct dmap_req_del_key {
-	char key[DMAP_KEY_SIZE];
+	unsigned char key[DMAP_KEY_SIZE];
 };
 
 struct dmap_resp_del_key {
@@ -52,20 +53,26 @@ struct dmap_resp_del_key {
 };
 
 struct dmap_req_hello {
-	char host[DMAP_HOST_SIZE];
-	int port;
+	struct dmap_address source;
 };
 
 struct dmap_resp_hello {
-	char host[DMAP_HOST_SIZE];
-	int port;
-};
-
-struct dmap_req_ping {
 	__le64 padding;
 };
 
+struct dmap_req_ping {
+	struct dmap_address source;
+};
+
 struct dmap_resp_ping {
+	__le64 padding;
+};
+
+struct dmap_req_bye {
+	struct dmap_address source;
+};
+
+struct dmap_resp_bye {
 	__le64 padding;
 };
 

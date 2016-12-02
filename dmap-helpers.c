@@ -27,7 +27,33 @@ const char *dmap_truncate_file_name(const char *file_name)
 		return file_name;
 }
 
-int dmap_hex_to_byte(unsigned char c)
+char dmap_byte_to_hex(unsigned char c)
+{
+	if (WARN_ON(c > 15))
+		return '0';
+
+	if (c < 10)
+		return '0' + c;
+	else
+		return 'a' + c - 10;
+}
+
+void dmap_bytes_to_hex(unsigned char *src, int slen, char *dst, int dlen)
+{
+	int i;
+
+	if (WARN_ON(dlen < (2 * slen + 1)))
+		return;
+
+	for (i = 0; i < slen; i++) {
+		dst[2 * i] = dmap_byte_to_hex((src[i] >> 4) & 0xF);
+		dst[2 * i + 1] = dmap_byte_to_hex(src[i] & 0xF);
+	}
+
+	dst[2 * slen] = '\0';
+}
+
+unsigned char dmap_hex_to_byte(char c)
 {
 	if (c >= '0' && c <= '9')
 		return c - '0';

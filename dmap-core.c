@@ -14,12 +14,13 @@
 #include <linux/rwsem.h>
 #include <linux/cdrom.h>
 #include <linux/kthread.h>
+#include <linux/random.h>
 
+#include "malloc-checker.h"
 #include "dmap.h"
 #include "dmap-sysfs.h"
 #include "dmap-connection.h"
 #include "dmap-trace-helpers.h"
-#include "dmap-malloc-checker.h"
 #include "dmap-helpers.h"
 #include "dmap-malloc.h"
 #include "dmap-neighbor.h"
@@ -32,6 +33,11 @@ static int dmap_init(struct dmap *map)
 
 	init_rwsem(&map->rw_sem);
 	INIT_LIST_HEAD(&map->neighbor_list);
+
+	get_random_bytes(map->id, sizeof(map->id));
+
+	dmap_bytes_to_hex(map->id, ARRAY_SIZE(map->id),
+			  map->id_str, ARRAY_SIZE(map->id_str));
 
 	r = dmap_server_init(&map->server);
 	if (r)
@@ -115,6 +121,15 @@ int dmap_remove_neighbor(struct dmap *map, char *host)
 		dmap_neighbor_put(found);
 
 	return (found) ? 0 : -ENOTTY;
+}
+
+void dmap_get_address(struct dmap *map, struct dmap_address *addr)
+{
+	snprintf(addr->host, ARRAY_SIZE(addr->host), "%s", map->server.host);
+	addr->port = map->server.port;
+
+	memcpy(addr->id, map->id, sizeof(addr->id));
+	snprintf(addr->id_str, ARRAY_SIZE(addr->id_str), "%s", map->id_str);
 }
 
 void *dmap_kzalloc(size_t size, gfp_t flags)
