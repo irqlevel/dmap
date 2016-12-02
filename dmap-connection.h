@@ -57,7 +57,7 @@ struct dmap_req_hello {
 };
 
 struct dmap_resp_hello {
-	__le64 padding;
+	struct dmap_address addr;
 };
 
 struct dmap_req_ping {
@@ -98,5 +98,8 @@ int dmap_con_send(struct dmap_connection *con, u32 type, u32 len,
 
 int dmap_con_recv(struct dmap_connection *con, struct dmap_packet *packet,
 		  u32 *type, u32 *len, u32 *result);
+
+int dmap_con_recv_check(struct dmap_connection *con, struct dmap_packet *packet,
+			u32 type, u32 len);
 
 #endif

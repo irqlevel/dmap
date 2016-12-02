@@ -16,9 +16,14 @@ struct dmap {
 	struct list_head neighbor_list;
 };
 
-int dmap_add_neighbor(struct dmap *map, char *host, int port);
+int dmap_add_neighbor(struct dmap *map, struct dmap_address *addr, bool hello);
 
 int dmap_remove_neighbor(struct dmap *map, char *host);
+
+struct dmap_neighbor *dmap_lookup_neighbor(struct dmap *map,
+					   struct dmap_address *addr);
+
+int dmap_erase_neighbor(struct dmap *map, struct dmap_neighbor *victim);
 
 void dmap_get_address(struct dmap *map, struct dmap_address *addr);
 

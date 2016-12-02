@@ -1,31 +1,60 @@
 #include "dmap-handler.h"
+#include "dmap-neighbor.h"
 #include "dmap-trace-helpers.h"
 
 static int dmap_handle_hello(struct dmap *map, struct dmap_req_hello *req,
 			     struct dmap_resp_hello *resp)
 {
+	int r;
+
 	TRACE("hello %s:%d %s",
 	      req->source.host, req->source.port, req->source.id_str);
 
+	r = dmap_add_neighbor(map, &req->source, true);
+	if (r) {
+		if (r == -EEXIST)
+			r = 0;
+		else
+			return r;
+	}
+
+	dmap_get_address(map, &resp->addr);
 	return 0;
 }
 
 static int dmap_handle_ping(struct dmap *map, struct dmap_req_ping *req,
 			    struct dmap_resp_ping *resp)
 {
+	struct dmap_neighbor *neighbor;
+
 	TRACE("ping %s:%d %s",
 	      req->source.host, req->source.port, req->source.id_str);
 
+	neighbor = dmap_lookup_neighbor(map, &req->source);
+	if (!neighbor)
+		return -ENOTTY;
+
+	dmap_neighbor_put(neighbor);
 	return 0;
 }
 
 static int dmap_handle_bye(struct dmap *map, struct dmap_req_bye *req,
 			   struct dmap_resp_bye *resp)
 {
+	struct dmap_neighbor *neighbor;
+	int r;
+
 	TRACE("bye %s:%d %s",
 	      req->source.host, req->source.port, req->source.id_str);
 
-	return 0;
+	neighbor = dmap_lookup_neighbor(map, &req->source);
+	if (!neighbor)
+		return -ENOTTY;
+
+	r = dmap_erase_neighbor(map, neighbor);
+
+	dmap_neighbor_put(neighbor);
+	return r;
 }
 
 int dmap_handle_request(struct dmap *map, u32 type, void *req_body, u32 req_len,

@@ -178,3 +178,22 @@ unlock:
 	mutex_unlock(&con->mutex);
 	return r;
 }
+
+int dmap_con_recv_check(struct dmap_connection *con, struct dmap_packet *packet,
+			u32 type, u32 len)
+{
+	u32 ltype, llen, lresult;
+	int r;
+
+	r = dmap_con_recv(con, packet, &ltype, &llen, &lresult);
+	if (r)
+		return r;
+
+	if (llen != len)
+		return -EBADF;
+
+	if (ltype != type)
+		return -EBADF;
+
+	return lresult;
+}

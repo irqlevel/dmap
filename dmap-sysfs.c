@@ -117,13 +117,16 @@ static ssize_t dmap_attr_add_neighbor_store(struct dmap *map,
 					  const char *buf, size_t count)
 {
 	char host[DMAP_PARAM_SIZE];
+	struct dmap_address addr = {0};
 	int r, port;
 
 	r = sscanf(buf, DMAP_PARAM_FMT" %d", host, &port);
 	if (r != 2)
 		return -EINVAL;
 
-	r = dmap_add_neighbor(map, host, port);
+	snprintf(addr.host, ARRAY_SIZE(addr.host), "%s", host);
+	addr.port = port;
+	r = dmap_add_neighbor(map, &addr, false);
 	if (r)
 		return r;
 
@@ -175,8 +178,9 @@ static ssize_t dmap_attr_neighbors_show(struct dmap *map,
 			r = -ENOMEM;
 			break;
 		}
-		n = snprintf((char *)buf + off, PAGE_SIZE - off, "%s:%d\n",
-			curr->host, curr->port);
+		n = snprintf((char *)buf + off, PAGE_SIZE - off,
+			"%s:%d %s %d\n", curr->addr.host, curr->addr.port,
+			curr->addr.id_str, curr->state);
 		if (n <= 0) {
 			r = -ENOMEM;
 			break;
