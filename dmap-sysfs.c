@@ -179,8 +179,8 @@ static ssize_t dmap_attr_neighbors_show(struct dmap *map,
 			break;
 		}
 		n = snprintf((char *)buf + off, PAGE_SIZE - off,
-			"%s:%d %s %d\n", curr->addr.host, curr->addr.port,
-			curr->addr.id_str, curr->state);
+			"%s:%d %s %llu %d\n", curr->addr.host, curr->addr.port,
+			curr->addr.id_str, curr->ping_us, curr->state);
 		if (n <= 0) {
 			r = -ENOMEM;
 			break;

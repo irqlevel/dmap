@@ -7,6 +7,10 @@ static int dmap_handle_hello(struct dmap *map, struct dmap_req_hello *req,
 {
 	int r;
 
+	r = dmap_check_address(&req->source);
+	if (r)
+		return r;
+
 	TRACE("hello %s:%d %s",
 	      req->source.host, req->source.port, req->source.id_str);
 
@@ -26,6 +30,12 @@ static int dmap_handle_ping(struct dmap *map, struct dmap_req_ping *req,
 			    struct dmap_resp_ping *resp)
 {
 	struct dmap_neighbor *neighbor;
+	int r;
+
+	r = dmap_check_address(&req->source);
+	if (r)
+		return r;
+
 
 	TRACE("ping %s:%d %s",
 	      req->source.host, req->source.port, req->source.id_str);
@@ -43,6 +53,10 @@ static int dmap_handle_bye(struct dmap *map, struct dmap_req_bye *req,
 {
 	struct dmap_neighbor *neighbor;
 	int r;
+
+	r = dmap_check_address(&req->source);
+	if (r)
+		return r;
 
 	TRACE("bye %s:%d %s",
 	      req->source.host, req->source.port, req->source.id_str);

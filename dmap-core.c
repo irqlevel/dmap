@@ -27,6 +27,33 @@
 
 static struct dmap global_dmap;
 
+static void dmap_ping_worker(struct work_struct *work)
+{
+	struct dmap_neighbor *curr;
+	struct dmap *map;
+
+	map = container_of(work, struct dmap, ping_work);
+
+	down_read(&map->rw_sem);
+	list_for_each_entry(curr, &map->neighbor_list, list) {
+		dmap_neighbor_ping(curr);
+	}
+	up_read(&map->rw_sem);
+}
+
+static enum hrtimer_restart dmap_timer_callback(struct hrtimer *timer)
+{
+	struct dmap *map;
+
+	map = container_of(timer, struct dmap, timer);
+	queue_work(map->wq, &map->ping_work);
+
+	hrtimer_start(&map->timer, ktime_add_ms(ktime_get(), DMAP_TIMER_MS),
+		      HRTIMER_MODE_ABS);
+
+	return HRTIMER_NORESTART;
+}
+
 static int dmap_init(struct dmap *map)
 {
 	int r;
@@ -39,6 +66,16 @@ static int dmap_init(struct dmap *map)
 	dmap_bytes_to_hex(map->id, ARRAY_SIZE(map->id),
 			  map->id_str, ARRAY_SIZE(map->id_str));
 
+	hrtimer_init(&map->timer, CLOCK_MONOTONIC, HRTIMER_MODE_ABS);
+	map->timer.function = dmap_timer_callback;
+
+	INIT_WORK(&map->ping_work, dmap_ping_worker);
+	map->wq = alloc_workqueue("dmap-wq", WQ_MEM_RECLAIM, 0);
+	if (!map->wq) {
+		r = -ENOMEM;
+		goto out;
+	}
+
 	r = dmap_server_init(&map->server);
 	if (r)
 		return r;
@@ -48,16 +85,23 @@ static int dmap_init(struct dmap *map)
 	if (r)
 		goto deinit_server;
 
+	hrtimer_start(&map->timer, ktime_add_ms(ktime_get(), DMAP_TIMER_MS),
+		      HRTIMER_MODE_ABS);
+
 	return 0;
 
 deinit_server:
 	dmap_server_deinit(&map->server);
+out:
 	return r;
 }
 
 static void dmap_deinit(struct dmap *map)
 {
 	struct dmap_neighbor *curr, *tmp;
+
+	hrtimer_cancel(&map->timer);
+	destroy_workqueue(map->wq);
 
 	dmap_sysfs_deinit(&map->kobj_holder);
 	dmap_server_deinit(&map->server);
@@ -108,23 +152,28 @@ int dmap_add_neighbor(struct dmap *map, struct dmap_address *addr, bool hello)
 		if (strncmp(curr->addr.host, new->addr.host,
 		    strlen(curr->addr.host) + 1) == 0) {
 			r = -EEXIST;
-			break;
+			goto unlock;
 		}
 		if (hello && memcmp(curr->addr.id, new->addr.id,
 		    sizeof(curr->addr.id)) == 0) {
 			r = -EEXIST;
-			break;
+			goto unlock;
 		}
 	}
-	if (!r) {
-		if (!hello)
-			r = dmap_neighbor_hello(new);
 
-		if (!r) {
-			dmap_neighbor_get(new);
-			list_add_tail(&new->list, &map->neighbor_list);
-		}
+	if (!hello)
+		r = dmap_neighbor_hello(new);
+	else {
+		mutex_lock(&new->mutex);
+		dmap_neighbor_set_state(new, DMAP_NEIGHBOR_S_HELLO);
+		mutex_unlock(&new->mutex);
 	}
+
+	if (!r) {
+		dmap_neighbor_get(new);
+		list_add_tail(&new->list, &map->neighbor_list);
+	}
+
 unlock:
 	up_write(&map->rw_sem);
 	dmap_neighbor_put(new);
@@ -204,6 +253,16 @@ void dmap_get_address(struct dmap *map, struct dmap_address *addr)
 
 	memcpy(addr->id, map->id, sizeof(addr->id));
 	snprintf(addr->id_str, ARRAY_SIZE(addr->id_str), "%s", map->id_str);
+}
+
+int dmap_check_address(struct dmap_address *addr)
+{
+	if (addr->host[ARRAY_SIZE(addr->host) - 1] != '\0')
+		return -EINVAL;
+	if (addr->id_str[ARRAY_SIZE(addr->id_str) - 1] != '\0')
+		return -EINVAL;
+
+	return 0;
 }
 
 void *dmap_kzalloc(size_t size, gfp_t flags)

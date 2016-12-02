@@ -1,10 +1,10 @@
 #include "dmap-neighbor.h"
 #include "dmap-malloc.h"
 #include "dmap.h"
+#include "dmap-trace-helpers.h"
 
 static void dmap_neighbor_free(struct dmap_neighbor *neighbor)
 {
-	destroy_workqueue(neighbor->wq);
 	dmap_con_deinit(&neighbor->con);
 	dmap_kfree(neighbor);
 }
@@ -20,7 +20,7 @@ void dmap_neighbor_get(struct dmap_neighbor *neighbor)
 	atomic_inc(&neighbor->ref_count);
 }
 
-static void dmap_neighbor_set_state(struct dmap_neighbor *neighbor, int state)
+void dmap_neighbor_set_state(struct dmap_neighbor *neighbor, int state)
 {
 	neighbor->state = state;
 }
@@ -34,6 +34,9 @@ static int dmap_neighbor_connect(struct dmap_neighbor *neighbor)
 	if (r) {
 		if (r == -EEXIST)
 			return 0;
+
+		TRACE_ERR(r, "connect %s:%d failed", neighbor->addr.host,
+			  neighbor->addr.port);
 
 		dmap_neighbor_set_state(neighbor, DMAP_NEIGHBOR_S_BROKEN);
 		return r;
@@ -116,14 +119,20 @@ int dmap_neighbor_ping(struct dmap_neighbor *neighbor)
 	struct dmap_resp_ping *resp =
 		(struct dmap_resp_ping *)neighbor->response.body;
 	int r;
+	ktime_t start;
 
 	mutex_lock(&neighbor->mutex);
+	if (neighbor->state != DMAP_NEIGHBOR_S_HELLO) {
+		r = -ENOTTY;
+		goto unlock;
+	}
+
 	r = dmap_neighbor_connect(neighbor);
 	if (r)
 		goto unlock;
 
 	dmap_get_address(neighbor->map, &req->source);
-
+	start = ktime_get();
 	r = dmap_con_send(&neighbor->con, DMAP_PACKET_PING, sizeof(*req), 0,
 			  &neighbor->request);
 	if (r)
@@ -133,6 +142,8 @@ int dmap_neighbor_ping(struct dmap_neighbor *neighbor)
 				DMAP_PACKET_PING, sizeof(*resp));
 	if (r)
 		dmap_neighbor_set_state(neighbor, DMAP_NEIGHBOR_S_BROKEN);
+	else
+		neighbor->ping_us = ktime_us_delta(ktime_get(), start);
 
 unlock:
 	mutex_unlock(&neighbor->mutex);
@@ -162,14 +173,8 @@ struct dmap_neighbor *dmap_neighbor_create(struct dmap *map,
 	if (r)
 		goto free_neighbor;
 
-	neighbor->wq = alloc_workqueue("dmap-neighbor-wq", WQ_MEM_RECLAIM, 0);
-	if (!neighbor->wq)
-		goto deinit_con;
-
 	return neighbor;
 
-deinit_con:
-	dmap_con_deinit(&neighbor->con);
 free_neighbor:
 	dmap_kfree(neighbor);
 	return NULL;

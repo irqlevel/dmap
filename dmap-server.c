@@ -34,6 +34,11 @@ static int dmap_server_con_thread(void *data)
 		r = dmap_con_recv(&con->con, &con->request,
 				  &type, &len, &result);
 		if (r) {
+			if (r == -EAGAIN) {
+				r = 0;
+				continue;
+			}
+
 			TRACE_ERR(r, "con 0x%p id %llu recv failed",
 				  con, con->id);
 			break;
@@ -88,6 +93,7 @@ static int dmap_server_con_start(struct dmap_server *srv, struct socket *sock)
 		goto del_thread;
 
 	con->thread = thread;
+	con->srv = srv;
 
 	mutex_lock(&srv->mutex);
 	list_add_tail(&con->list, &srv->con_list);
@@ -111,6 +117,7 @@ static void dmap_server_con_release(struct dmap_server_con *con)
 	mutex_lock(&con->mutex);
 	if (con->thread) {
 		con->stopping = true;
+		PRINTK("going to stop thread 0x%p", con->thread);
 		kthread_stop(con->thread);
 		con->thread = NULL;
 		dmap_con_deinit(&con->con);
@@ -215,6 +222,7 @@ int dmap_server_stop(struct dmap_server *srv)
 	if (srv->thread) {
 		srv->stopping = true;
 		ksock_abort_accept(srv->sock);
+		PRINTK("going to stop thread 0x%p", srv->thread);
 		kthread_stop(srv->thread);
 		srv->thread = NULL;
 		ksock_release(srv->sock);

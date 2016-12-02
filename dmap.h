@@ -7,6 +7,8 @@
 #include "dmap-connection.h"
 #include "dmap-server.h"
 
+#include <linux/hrtimer.h>
+
 struct dmap {
 	struct rw_semaphore rw_sem;
 	struct dmap_kobject_holder kobj_holder;
@@ -14,6 +16,9 @@ struct dmap {
 	char id[DMAP_ID_SIZE];
 	char id_str[2 * DMAP_ID_SIZE + 1];
 	struct list_head neighbor_list;
+	struct work_struct ping_work;
+	struct workqueue_struct *wq;
+	struct hrtimer timer;
 };
 
 int dmap_add_neighbor(struct dmap *map, struct dmap_address *addr, bool hello);
@@ -26,5 +31,7 @@ struct dmap_neighbor *dmap_lookup_neighbor(struct dmap *map,
 int dmap_erase_neighbor(struct dmap *map, struct dmap_neighbor *victim);
 
 void dmap_get_address(struct dmap *map, struct dmap_address *addr);
+
+int dmap_check_address(struct dmap_address *addr);
 
 #endif
