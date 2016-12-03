@@ -214,16 +214,16 @@ func (client *Client) RecvPacket() (*DmapPacket, error) {
 	return packet, nil
 }
 
-func (client *Client) MakePacket(req DmapToBytes) (*DmapPacket, error) {
+func (client *Client) MakePacket(reqType uint32, req DmapToBytes) (*DmapPacket, error) {
 	body, err := req.ToBytes()
 	if err != nil {
 		return nil, err
 	}
-	return client.CreatePacket(DmapPacketSetKey, body), nil
+	return client.CreatePacket(reqType, body), nil
 }
 
-func (client *Client) SendRequest(req DmapToBytes) error {
-	packet, err := client.MakePacket(req)
+func (client *Client) SendRequest(reqType uint32, req DmapToBytes) error {
+	packet, err := client.MakePacket(reqType, req)
 	if err != nil {
 		return err
 	}
@@ -231,10 +231,15 @@ func (client *Client) SendRequest(req DmapToBytes) error {
 	return client.SendPacket(packet)
 }
 
-func (client *Client) RecvResponse(resp DmapParseBytes) error {
+func (client *Client) RecvResponse(respType uint32, resp DmapParseBytes) error {
 	packet, err := client.RecvPacket()
 	if err != nil {
 		return err
+	}
+
+	if packet.Header.Type != respType {
+		return fmt.Errorf("Unexpected packet type %d, should be %d",
+			packet.Header.Type, respType)
 	}
 
 	if packet.Header.Result != 0 {
@@ -244,13 +249,13 @@ func (client *Client) RecvResponse(resp DmapParseBytes) error {
 	return resp.ParseBytes(packet.Body)
 }
 
-func (client *Client) SendRecv(req DmapToBytes, resp DmapParseBytes) error {
-	err := client.SendRequest(req)
+func (client *Client) SendRecv(reqType uint32, req DmapToBytes, resp DmapParseBytes) error {
+	err := client.SendRequest(reqType, req)
 	if err != nil {
 		return err
 	}
 
-	err = client.RecvResponse(resp)
+	err = client.RecvResponse(reqType, resp)
 	if err != nil {
 		return err
 	}
@@ -277,7 +282,7 @@ func (client *Client) SetKey(key string, value string) error {
 	copy(req.Value[:len(req.Value)], valueBytes)
 
 
-	err := client.SendRecv(req, resp)
+	err := client.SendRecv(DmapPacketSetKey, req, resp)
 	if err != nil {
 		return err
 	}
@@ -296,7 +301,7 @@ func (client *Client) GetKey(key string) (string, error) {
 
 	copy(req.Key[:len(req.Key)], keyBytes)
 
-	err := client.SendRecv(req, resp)
+	err := client.SendRecv(DmapPacketGetKey, req, resp)
 	if err != nil {
 		return "", err
 	}
@@ -315,7 +320,7 @@ func (client *Client) DelKey(key string) error {
 
 	copy(req.Key[:len(req.Key)], keyBytes)
 
-	err := client.SendRecv(req, resp)
+	err := client.SendRecv(DmapPacketDelKey, req, resp)
 	if err != nil {
 		return err
 	}

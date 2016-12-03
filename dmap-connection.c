@@ -7,8 +7,6 @@
 
 int dmap_con_init(struct dmap_connection *con)
 {
-	TRACE("con 0x%p init", con);
-
 	memset(con, 0, sizeof(*con));
 	mutex_init(&con->mutex);
 

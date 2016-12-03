@@ -71,6 +71,31 @@ static int dmap_handle_bye(struct dmap *map, struct dmap_req_bye *req,
 	return r;
 }
 
+static int dmap_handle_set_key(struct dmap *map, struct dmap_req_set_key *req,
+			   struct dmap_resp_set_key *resp)
+{
+	TRACE("set key: %16phN", req->key);
+
+	return 0;
+}
+
+static int dmap_handle_get_key(struct dmap *map, struct dmap_req_get_key *req,
+			   struct dmap_resp_get_key *resp)
+{
+	TRACE("get key: %16phN", req->key);
+
+	memset(resp->value, 0, sizeof(resp->value));
+	return 0;
+}
+
+static int dmap_handle_del_key(struct dmap *map, struct dmap_req_del_key *req,
+			   struct dmap_resp_del_key *resp)
+{
+	TRACE("del key: %16phN", req->key);
+
+	return 0;
+}
+
 int dmap_handle_request(struct dmap *map, u32 type, void *req_body, u32 req_len,
 			void *resp_body, u32 *resp_len)
 {
@@ -115,6 +140,48 @@ int dmap_handle_request(struct dmap *map, u32 type, void *req_body, u32 req_len,
 		}
 
 		r = dmap_handle_bye(map, req, resp);
+
+		*resp_len = sizeof(*resp);
+		break;
+	}
+	case DMAP_PACKET_SET_KEY: {
+		struct dmap_req_set_key *req = req_body;
+		struct dmap_resp_set_key *resp = resp_body;
+
+		if (req_len != sizeof(*req)) {
+			r = -EINVAL;
+			break;
+		}
+
+		r = dmap_handle_set_key(map, req, resp);
+
+		*resp_len = sizeof(*resp);
+		break;
+	}
+	case DMAP_PACKET_GET_KEY: {
+		struct dmap_req_get_key *req = req_body;
+		struct dmap_resp_get_key *resp = resp_body;
+
+		if (req_len != sizeof(*req)) {
+			r = -EINVAL;
+			break;
+		}
+
+		r = dmap_handle_get_key(map, req, resp);
+
+		*resp_len = sizeof(*resp);
+		break;
+	}
+	case DMAP_PACKET_DEL_KEY: {
+		struct dmap_req_del_key *req = req_body;
+		struct dmap_resp_del_key *resp = resp_body;
+
+		if (req_len != sizeof(*req)) {
+			r = -EINVAL;
+			break;
+		}
+
+		r = dmap_handle_del_key(map, req, resp);
 
 		*resp_len = sizeof(*resp);
 		break;

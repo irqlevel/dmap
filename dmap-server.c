@@ -28,8 +28,6 @@ static int dmap_server_con_thread(void *data)
 	srv = con->srv;
 	map = container_of(srv, struct dmap, server);
 
-	TRACE("con 0x%p id %llu running, thread 0x%p", con, con->id, current);
-
 	while (!kthread_should_stop() && !con->stopping) {
 		r = dmap_con_recv(&con->con, &con->request,
 				  &type, &len, &result);
@@ -39,8 +37,10 @@ static int dmap_server_con_thread(void *data)
 				continue;
 			}
 
-			TRACE_ERR(r, "con 0x%p id %llu recv failed",
+			if (r != -ECONNRESET) {
+				TRACE_ERR(r, "con 0x%p id %llu recv failed",
 				  con, con->id);
+			}
 			break;
 		}
 
@@ -53,13 +53,13 @@ static int dmap_server_con_thread(void *data)
 		r = dmap_con_send(&con->con, type, len, result,
 				  &con->response);
 		if (r) {
-			TRACE_ERR(r, "con 0x%p id %llu send failed",
+			if (r != -ECONNRESET) {
+				TRACE_ERR(r, "con 0x%p id %llu send failed",
 				  con, con->id);
+			}
 			break;
 		}
 	}
-
-	TRACE("con 0x%p id %llu stopped, thread 0x%p", con, con->id, current);
 
 	return 0;
 }
@@ -141,15 +141,11 @@ static int dmap_server_thread(void *data)
 
 	while (!kthread_should_stop() && !srv->stopping) {
 
-		TRACE("accepting");
-
 		r = ksock_accept(&sock, srv->sock);
 		if (r) {
 			TRACE_ERR(r, "accept failed");
 			continue;
 		}
-
-		TRACE("accepted");
 
 		r = dmap_server_con_start(srv, sock);
 		if (r) {
