@@ -10,3 +10,4 @@ temp/
 *.swp
 *.out
 tags
+dmap-client

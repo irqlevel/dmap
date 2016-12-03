@@ -121,6 +121,7 @@ int dmap_handle_request(struct dmap *map, u32 type, void *req_body, u32 req_len,
 	}
 	default:
 		r = -EINVAL;
+		TRACE_ERR(r, "unsupported request type %d", type);
 		break;
 	}
 

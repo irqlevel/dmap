@@ -117,7 +117,7 @@ static void dmap_server_con_release(struct dmap_server_con *con)
 	mutex_lock(&con->mutex);
 	if (con->thread) {
 		con->stopping = true;
-		PRINTK("going to stop thread 0x%p", con->thread);
+		PRINTK("going to stop connection thread 0x%p", con->thread);
 		kthread_stop(con->thread);
 		con->thread = NULL;
 		dmap_con_deinit(&con->con);
@@ -222,7 +222,7 @@ int dmap_server_stop(struct dmap_server *srv)
 	if (srv->thread) {
 		srv->stopping = true;
 		ksock_abort_accept(srv->sock);
-		PRINTK("going to stop thread 0x%p", srv->thread);
+		PRINTK("going to stop server thread 0x%p", srv->thread);
 		kthread_stop(srv->thread);
 		srv->thread = NULL;
 		ksock_release(srv->sock);
