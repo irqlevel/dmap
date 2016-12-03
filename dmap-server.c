@@ -28,7 +28,7 @@ static int dmap_server_con_thread(void *data)
 	srv = con->srv;
 	map = container_of(srv, struct dmap, server);
 
-	TRACE("con 0x%p id %llu running", con, con->id);
+	TRACE("con 0x%p id %llu running, thread 0x%p", con, con->id, current);
 
 	while (!kthread_should_stop() && !con->stopping) {
 		r = dmap_con_recv(&con->con, &con->request,
@@ -58,7 +58,8 @@ static int dmap_server_con_thread(void *data)
 			break;
 		}
 	}
-	TRACE("con 0x%p id %llu stopped", con, con->id);
+
+	TRACE("con 0x%p id %llu stopped, thread 0x%p", con, con->id, current);
 
 	return 0;
 }
@@ -92,6 +93,7 @@ static int dmap_server_con_start(struct dmap_server *srv, struct socket *sock)
 	if (r)
 		goto del_thread;
 
+	get_task_struct(thread);
 	con->thread = thread;
 	con->srv = srv;
 
@@ -119,6 +121,7 @@ static void dmap_server_con_release(struct dmap_server_con *con)
 		con->stopping = true;
 		PRINTK("going to stop connection thread 0x%p", con->thread);
 		kthread_stop(con->thread);
+		put_task_struct(con->thread);
 		con->thread = NULL;
 		dmap_con_deinit(&con->con);
 		con->stopping = false;
@@ -134,7 +137,7 @@ static int dmap_server_thread(void *data)
 	int r;
 
 	srv = (struct dmap_server *)data;
-	TRACE("server 0x%p running", srv);
+	PRINTK("server 0x%p running, thread 0x%p", srv, current);
 
 	while (!kthread_should_stop() && !srv->stopping) {
 
@@ -155,7 +158,7 @@ static int dmap_server_thread(void *data)
 		}
 	}
 
-	TRACE("server 0x%p stopped", srv);
+	PRINTK("server 0x%p stopped, thread 0x%p", srv, current);
 
 	return 0;
 }
@@ -198,6 +201,7 @@ int dmap_server_start(struct dmap_server *srv, char *host, int port)
 		goto release_sock;
 	}
 
+	get_task_struct(thread);
 	srv->thread = thread;
 	srv->sock = sock;
 	INIT_LIST_HEAD(&srv->con_list);
@@ -224,6 +228,7 @@ int dmap_server_stop(struct dmap_server *srv)
 		ksock_abort_accept(srv->sock);
 		PRINTK("going to stop server thread 0x%p", srv->thread);
 		kthread_stop(srv->thread);
+		put_task_struct(srv->thread);
 		srv->thread = NULL;
 		ksock_release(srv->sock);
 		srv->sock = NULL;
