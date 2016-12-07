@@ -60,6 +60,7 @@ static int dmap_init(struct dmap *map)
 
 	init_rwsem(&map->rw_sem);
 	INIT_LIST_HEAD(&map->neighbor_list);
+	dmap_hash_init(&map->hash);
 
 	get_random_bytes(map->id, sizeof(map->id));
 
@@ -113,6 +114,8 @@ static void dmap_deinit(struct dmap *map)
 		dmap_neighbor_put(curr);
 	}
 	up_write(&map->rw_sem);
+
+	dmap_hash_deinit(&map->hash);
 }
 
 static struct dmap *get_dmap(void)

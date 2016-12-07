@@ -6,6 +6,7 @@
 #include "dmap-sysfs.h"
 #include "dmap-connection.h"
 #include "dmap-server.h"
+#include "dmap-hash.h"
 
 #include <linux/hrtimer.h>
 
@@ -19,6 +20,7 @@ struct dmap {
 	struct work_struct ping_work;
 	struct workqueue_struct *wq;
 	struct hrtimer timer;
+	struct dmap_hash hash;
 };
 
 int dmap_add_neighbor(struct dmap *map, struct dmap_address *addr, bool hello);

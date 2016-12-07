@@ -1,6 +1,7 @@
 #include "dmap-handler.h"
 #include "dmap-neighbor.h"
 #include "dmap-trace-helpers.h"
+#include "dmap-hash.h"
 
 static int dmap_handle_hello(struct dmap *map, struct dmap_req_hello *req,
 			     struct dmap_resp_hello *resp)
@@ -74,26 +75,39 @@ static int dmap_handle_bye(struct dmap *map, struct dmap_req_bye *req,
 static int dmap_handle_set_key(struct dmap *map, struct dmap_req_set_key *req,
 			   struct dmap_resp_set_key *resp)
 {
-	TRACE("set key: %16phN", req->key);
+	int r;
 
-	return 0;
+	r = dmap_hash_insert(&map->hash, req->key, sizeof(req->key),
+			     req->value, sizeof(req->value));
+	TRACE("set key: %16phN r: %d", req->key, r);
+
+	return r;
 }
 
 static int dmap_handle_get_key(struct dmap *map, struct dmap_req_get_key *req,
 			   struct dmap_resp_get_key *resp)
 {
-	TRACE("get key: %16phN", req->key);
+	int r;
+	size_t value_len;
 
-	memset(resp->value, 0, sizeof(resp->value));
-	return 0;
+	r = dmap_hash_get(&map->hash, req->key, sizeof(req->key),
+			  resp->value, sizeof(resp->value), &value_len);
+
+	TRACE("get key: %16phN value: %16phN r: %d", req->key, resp->value);
+
+
+	return r;
 }
 
 static int dmap_handle_del_key(struct dmap *map, struct dmap_req_del_key *req,
 			   struct dmap_resp_del_key *resp)
 {
-	TRACE("del key: %16phN", req->key);
+	int r;
 
-	return 0;
+	r = dmap_hash_delete(&map->hash, req->key, sizeof(req->key));
+	TRACE("del key: %16phN r: %d", req->key, r);
+
+	return r;
 }
 
 int dmap_handle_request(struct dmap *map, u32 type, void *req_body, u32 req_len,

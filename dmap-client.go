@@ -199,7 +199,6 @@ func (client *Client) RecvPacket() (*DmapPacket, error) {
 
 	body := make([]byte, packet.Header.Len)
 	if packet.Header.Len != 0 {
-		body := make([]byte, packet.Header.Len)
 		n, err := io.ReadFull(client.Con, body)
 		if err != nil {
 			return nil, err
