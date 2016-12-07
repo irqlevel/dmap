@@ -6,7 +6,7 @@
 #include <linux/rbtree.h>
 #include <linux/rwlock.h>
 
-#define DMAP_HASH_SIZE	512
+#define DMAP_HASH_SIZE	32768
 
 struct dmap_hash_node {
 	struct rb_node link;
