@@ -6,7 +6,7 @@ DMAP_MOD_KO = $(DMAP_MOD).ko
 
 dmap-y +=	dmap-core.o dmap-sysfs.o dmap-connection.o ksocket.o	\
 		dmap-trace.o malloc-checker.o dmap-helpers.o		\
-		dmap-server.o dmap-neighbor.o				\
+		dmap-server.o dmap-neighbor.o dmap-sha256.o		\
 		dmap-handler.o dmap-hash.o
 
 obj-m = $(DMAP_MOD).o
