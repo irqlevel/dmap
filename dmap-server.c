@@ -3,6 +3,7 @@
 #include "dmap-malloc.h"
 #include "dmap.h"
 #include "dmap-handler.h"
+#include "dmap-neighbor.h"
 
 #include <linux/kthread.h>
 #include <linux/delay.h>
@@ -161,6 +162,8 @@ static int dmap_server_thread(void *data)
 
 int dmap_server_start(struct dmap_server *srv, char *host, int port)
 {
+	struct dmap_address addr;
+	struct dmap *map;
 	struct task_struct *thread;
 	struct socket *sock;
 	int r;
@@ -171,6 +174,14 @@ int dmap_server_start(struct dmap_server *srv, char *host, int port)
 		r = -EEXIST;
 		goto unlock;
 	}
+
+	map = container_of(srv, struct dmap, server);
+
+	dmap_addr_init(&addr, host, port, map->id);
+
+	r = dmap_add_neighbor(map, &addr, true);
+	if (r)
+		goto unlock;
 
 	snprintf(srv->host, ARRAY_SIZE(srv->host), "%s", host);
 	srv->port = port;
@@ -183,13 +194,13 @@ int dmap_server_start(struct dmap_server *srv, char *host, int port)
 				msleep_interruptible(100);
 				continue;
 			}
-			goto unlock;
+			goto remove_neighbor;
 		} else
 			break;
 	}
 
 	if (r)
-		goto unlock;
+		goto remove_neighbor;
 
 	thread = kthread_create(dmap_server_thread, srv, "dmap-server");
 	if (IS_ERR(thread)) {
@@ -208,6 +219,8 @@ int dmap_server_start(struct dmap_server *srv, char *host, int port)
 
 release_sock:
 	ksock_release(sock);
+remove_neighbor:
+	dmap_remove_neighbor(map, addr.host);
 unlock:
 	mutex_unlock(&srv->mutex);
 	return r;

@@ -60,6 +60,8 @@ static int dmap_init(struct dmap *map)
 
 	init_rwsem(&map->rw_sem);
 	INIT_LIST_HEAD(&map->neighbor_list);
+	map->neighbor_tree = RB_ROOT;
+
 	dmap_hash_init(&map->hash);
 
 	get_random_bytes(map->id, sizeof(map->id));
@@ -79,7 +81,7 @@ static int dmap_init(struct dmap *map)
 
 	r = dmap_server_init(&map->server);
 	if (r)
-		return r;
+		goto del_wq;
 
 	r = dmap_sysfs_init(&map->kobj_holder, fs_kobj, &dmap_ktype,
 			    "%s", "dmap");
@@ -93,6 +95,8 @@ static int dmap_init(struct dmap *map)
 
 deinit_server:
 	dmap_server_deinit(&map->server);
+del_wq:
+	destroy_workqueue(map->wq);
 out:
 	return r;
 }
@@ -110,6 +114,7 @@ static void dmap_deinit(struct dmap *map)
 	down_write(&map->rw_sem);
 	list_for_each_entry_safe(curr, tmp, &map->neighbor_list, list) {
 		list_del_init(&curr->list);
+		rb_erase(&curr->rb_link, &map->neighbor_tree);
 		dmap_neighbor_bye(curr);
 		dmap_neighbor_put(curr);
 	}
@@ -121,6 +126,40 @@ static void dmap_deinit(struct dmap *map)
 static struct dmap *get_dmap(void)
 {
 	return &global_dmap;
+}
+
+static bool __dmap_insert_neighbor(struct dmap *map,
+				   struct dmap_neighbor *neighbor)
+{
+	struct dmap_neighbor *curr;
+	struct rb_node **p;
+	struct rb_node *parent;
+	int cmp;
+	bool exist;
+
+	exist = false;
+	parent = NULL;
+	p = &map->neighbor_tree.rb_node;
+	while (*p) {
+		parent = *p;
+		curr = rb_entry(parent, struct dmap_neighbor, rb_link);
+		cmp = memcmp(neighbor->addr.id, curr->addr.id,
+			     sizeof(neighbor->addr.id));
+		if (cmp < 0)
+			p = &(*p)->rb_left;
+		else if (cmp > 0)
+			p = &(*p)->rb_right;
+		else {
+			exist = true;
+			break;
+		}
+	}
+	if (!exist) {
+		rb_link_node(&neighbor->rb_link, parent, p);
+		rb_insert_color(&neighbor->rb_link, &map->neighbor_tree);
+	}
+
+	return (exist) ? false : true;
 }
 
 int dmap_add_neighbor(struct dmap *map, struct dmap_address *addr, bool hello)
@@ -139,17 +178,6 @@ int dmap_add_neighbor(struct dmap *map, struct dmap_address *addr, bool hello)
 	}
 
 	down_write(&map->rw_sem);
-	if (strncmp(map->server.host, new->addr.host,
-		    strlen(map->server.host) + 1) == 0) {
-		r = -EINVAL;
-		goto unlock;
-	}
-
-	if (hello && memcmp(map->id, new->addr.id, sizeof(map->id)) == 0) {
-		r = -EINVAL;
-		goto unlock;
-	}
-
 	r = 0;
 	list_for_each_entry(curr, &map->neighbor_list, list) {
 		if (strncmp(curr->addr.host, new->addr.host,
@@ -173,8 +201,11 @@ int dmap_add_neighbor(struct dmap *map, struct dmap_address *addr, bool hello)
 	}
 
 	if (!r) {
-		dmap_neighbor_get(new);
-		list_add_tail(&new->list, &map->neighbor_list);
+		if (__dmap_insert_neighbor(map, new)) {
+			dmap_neighbor_get(new);
+			list_add_tail(&new->list, &map->neighbor_list);
+		} else
+			r = -EEXIST;
 	}
 
 unlock:
@@ -189,19 +220,59 @@ struct dmap_neighbor *dmap_lookup_neighbor(struct dmap *map,
 {
 	struct dmap_neighbor *curr;
 	struct dmap_neighbor *found = NULL;
+	struct rb_node *n;
+	int cmp;
 
 	down_read(&map->rw_sem);
-	list_for_each_entry(curr, &map->neighbor_list, list) {
-		if (memcmp(curr->addr.id, addr->id,
-			   sizeof(curr->addr.id)) == 0) {
+	n = map->neighbor_tree.rb_node;
+	while (n) {
+		curr = rb_entry(n, struct dmap_neighbor, rb_link);
+		cmp = memcmp(addr->id, curr->addr.id, sizeof(addr->id));
+		if (cmp < 0)
+			n = n->rb_left;
+		else if (cmp > 0)
+			n = n->rb_right;
+		else {
 			found = curr;
 			dmap_neighbor_get(found);
 			break;
 		}
-
 	}
 	up_read(&map->rw_sem);
 	return found;
+}
+
+struct dmap_neighbor *dmap_select_neighbor(struct dmap *map,
+					   unsigned char id[DMAP_ID_SIZE])
+{
+	struct dmap_neighbor *curr;
+	struct dmap_neighbor *found = NULL;
+	struct rb_node *n;
+
+	down_read(&map->rw_sem);
+	for (n = rb_first(&map->neighbor_tree); n != NULL; n = rb_next(n)) {
+		curr = rb_entry(n, struct dmap_neighbor, rb_link);
+		if (memcmp(id, curr->addr.id, sizeof(*id)) < 0) {
+			found = curr;
+			break;
+		}
+	}
+
+	if (found == NULL) {
+		n = rb_first(&map->neighbor_tree);
+		if (n)
+			found = rb_entry(n, struct dmap_neighbor, rb_link);
+	}
+
+	up_read(&map->rw_sem);
+	return found;
+}
+
+bool dmap_is_self_neighbor(struct dmap *map, struct dmap_neighbor *neighbor)
+{
+	if (memcmp(map->id, neighbor->addr.id, sizeof(map->id)) == 0)
+		return true;
+	return false;
 }
 
 int dmap_remove_neighbor(struct dmap *map, char *host)
@@ -214,6 +285,7 @@ int dmap_remove_neighbor(struct dmap *map, char *host)
 		if (strncmp(curr->addr.host, host,
 			    strlen(curr->addr.host) + 1) == 0) {
 			found = curr;
+			rb_erase(&found->rb_link, &map->neighbor_tree);
 			list_del_init(&found->list);
 			break;
 		}
@@ -236,6 +308,7 @@ int dmap_erase_neighbor(struct dmap *map, struct dmap_neighbor *victim)
 	down_write(&map->rw_sem);
 	list_for_each_entry_safe(curr, tmp, &map->neighbor_list, list) {
 		if (curr == victim) {
+			rb_erase(&curr->rb_link, &map->neighbor_tree);
 			list_del_init(&curr->list);
 			found = curr;
 			break;
@@ -249,13 +322,21 @@ int dmap_erase_neighbor(struct dmap *map, struct dmap_neighbor *victim)
 	return (found) ? 0 : -ENOTTY;
 }
 
+void dmap_addr_init(struct dmap_address *addr, char *host, int port,
+		    unsigned char id[DMAP_ID_SIZE])
+{
+	snprintf(addr->host, ARRAY_SIZE(addr->host), "%s", host);
+	addr->port = port;
+
+	memcpy(addr->id, id, sizeof(addr->id));
+
+	dmap_bytes_to_hex(addr->id, ARRAY_SIZE(addr->id),
+			  addr->id_str, ARRAY_SIZE(addr->id_str));
+}
+
 void dmap_get_address(struct dmap *map, struct dmap_address *addr)
 {
-	snprintf(addr->host, ARRAY_SIZE(addr->host), "%s", map->server.host);
-	addr->port = map->server.port;
-
-	memcpy(addr->id, map->id, sizeof(addr->id));
-	snprintf(addr->id_str, ARRAY_SIZE(addr->id_str), "%s", map->id_str);
+	dmap_addr_init(addr, map->server.host, map->server.port, map->id);
 }
 
 int dmap_check_address(struct dmap_address *addr)

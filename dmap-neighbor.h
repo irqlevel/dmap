@@ -22,6 +22,7 @@ struct dmap_neighbor {
 	struct dmap_connection con;
 	struct dmap_packet request;
 	struct dmap_packet response;
+	struct rb_node rb_link;
 	u64 ping_us;
 };
 
@@ -39,5 +40,17 @@ int dmap_neighbor_bye(struct dmap_neighbor *neighbor);
 int dmap_neighbor_ping(struct dmap_neighbor *neighbor);
 
 void dmap_neighbor_set_state(struct dmap_neighbor *neighbor, int state);
+
+int dmap_neighbor_set_key(struct dmap_neighbor *neighbor,
+			struct dmap_req_set_key *req,
+			struct dmap_resp_set_key *resp);
+
+int dmap_neighbor_get_key(struct dmap_neighbor *neighbor,
+			struct dmap_req_get_key *req,
+			struct dmap_resp_get_key *resp);
+
+int dmap_neighbor_del_key(struct dmap_neighbor *neighbor,
+			struct dmap_req_del_key *req,
+			struct dmap_resp_del_key *resp);
 
 #endif

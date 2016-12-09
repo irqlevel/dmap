@@ -202,6 +202,13 @@ static ssize_t dmap_attr_id_show(struct dmap *map,
 	return strlen(buf);
 }
 
+static ssize_t dmap_attr_nr_keys_show(struct dmap *map,
+				 char *buf)
+{
+	snprintf(buf, PAGE_SIZE, "%lu\n", atomic64_read(&map->hash.nr_keys));
+	return strlen(buf);
+}
+
 static ssize_t dmap_attr_show(struct kobject *kobj,
 				struct attribute *attr,
 				char *page)
@@ -245,6 +252,7 @@ static DMAP_ATTR_RW(add_neighbor);
 static DMAP_ATTR_RW(remove_neighbor);
 static DMAP_ATTR_RO(neighbors);
 static DMAP_ATTR_RO(id);
+static DMAP_ATTR_RO(nr_keys);
 
 static struct attribute *dmap_attrs[] = {
 	&dmap_attr_start_server.attr,
@@ -254,6 +262,7 @@ static struct attribute *dmap_attrs[] = {
 	&dmap_attr_remove_neighbor.attr,
 	&dmap_attr_neighbors.attr,
 	&dmap_attr_id.attr,
+	&dmap_attr_nr_keys.attr,
 	NULL,
 };
 

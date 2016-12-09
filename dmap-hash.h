@@ -25,6 +25,7 @@ struct dmap_hash_bucket {
 
 struct dmap_hash {
 	struct dmap_hash_bucket bucket[DMAP_HASH_SIZE];
+	atomic64_t nr_keys;
 };
 
 void dmap_hash_init(struct dmap_hash *hash);

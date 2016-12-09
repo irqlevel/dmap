@@ -179,3 +179,120 @@ free_neighbor:
 	dmap_kfree(neighbor);
 	return NULL;
 }
+
+int dmap_neighbor_set_key(struct dmap_neighbor *neighbor,
+			struct dmap_req_set_key *req,
+			struct dmap_resp_set_key *resp)
+{
+	struct dmap_req_set_key *lreq =
+		(struct dmap_req_set_key *)neighbor->request.body;
+	struct dmap_resp_set_key *lresp =
+		(struct dmap_resp_set_key *)neighbor->response.body;
+	int r;
+
+	mutex_lock(&neighbor->mutex);
+	if (neighbor->state != DMAP_NEIGHBOR_S_HELLO) {
+		r = -ENOTTY;
+		goto unlock;
+	}
+
+	r = dmap_neighbor_connect(neighbor);
+	if (r)
+		goto unlock;
+
+	memcpy(lreq, req, sizeof(*lreq));
+
+	r = dmap_con_send(&neighbor->con, DMAP_PACKET_SET_KEY, sizeof(*lreq), 0,
+			  &neighbor->request);
+	if (r)
+		goto unlock;
+
+	r = dmap_con_recv_check(&neighbor->con, &neighbor->response,
+				DMAP_PACKET_SET_KEY, sizeof(*lresp));
+	if (r)
+		goto unlock;
+
+	memcpy(resp, lresp, sizeof(*resp));
+
+unlock:
+	mutex_unlock(&neighbor->mutex);
+	return r;
+}
+
+int dmap_neighbor_get_key(struct dmap_neighbor *neighbor,
+			struct dmap_req_get_key *req,
+			struct dmap_resp_get_key *resp)
+{
+	struct dmap_req_get_key *lreq =
+		(struct dmap_req_get_key *)neighbor->request.body;
+	struct dmap_resp_get_key *lresp =
+		(struct dmap_resp_get_key *)neighbor->response.body;
+	int r;
+
+	mutex_lock(&neighbor->mutex);
+	if (neighbor->state != DMAP_NEIGHBOR_S_HELLO) {
+		r = -ENOTTY;
+		goto unlock;
+	}
+
+	r = dmap_neighbor_connect(neighbor);
+	if (r)
+		goto unlock;
+
+	memcpy(lreq, req, sizeof(*lreq));
+
+	r = dmap_con_send(&neighbor->con, DMAP_PACKET_GET_KEY, sizeof(*lreq), 0,
+			  &neighbor->request);
+	if (r)
+		goto unlock;
+
+	r = dmap_con_recv_check(&neighbor->con, &neighbor->response,
+				DMAP_PACKET_GET_KEY, sizeof(*lresp));
+	if (r)
+		goto unlock;
+
+	memcpy(resp, lresp, sizeof(*resp));
+
+unlock:
+	mutex_unlock(&neighbor->mutex);
+	return r;
+}
+
+int dmap_neighbor_del_key(struct dmap_neighbor *neighbor,
+			struct dmap_req_del_key *req,
+			struct dmap_resp_del_key *resp)
+{
+	struct dmap_req_del_key *lreq =
+		(struct dmap_req_del_key *)neighbor->request.body;
+	struct dmap_resp_del_key *lresp =
+		(struct dmap_resp_del_key *)neighbor->response.body;
+	int r;
+
+	mutex_lock(&neighbor->mutex);
+	if (neighbor->state != DMAP_NEIGHBOR_S_HELLO) {
+		r = -ENOTTY;
+		goto unlock;
+	}
+
+	r = dmap_neighbor_connect(neighbor);
+	if (r)
+		goto unlock;
+
+	memcpy(lreq, req, sizeof(*lreq));
+
+	r = dmap_con_send(&neighbor->con, DMAP_PACKET_DEL_KEY, sizeof(*lreq), 0,
+			  &neighbor->request);
+	if (r)
+		goto unlock;
+
+	r = dmap_con_recv_check(&neighbor->con, &neighbor->response,
+				DMAP_PACKET_DEL_KEY, sizeof(*lresp));
+	if (r)
+		goto unlock;
+
+	memcpy(resp, lresp, sizeof(*resp));
+
+unlock:
+	mutex_unlock(&neighbor->mutex);
+	return r;
+}

@@ -6,6 +6,7 @@ void dmap_hash_init(struct dmap_hash *hash)
 	struct dmap_hash_bucket *bucket;
 	int i;
 
+	atomic64_set(&hash->nr_keys, 0);
 	for (i = 0; i < ARRAY_SIZE(hash->bucket); i++) {
 		bucket = &hash->bucket[i];
 		rwlock_init(&bucket->lock);
@@ -144,6 +145,7 @@ static int dmap_hash_insert_node(struct dmap_hash *hash,
 		rb_insert_color(&node->link, &bucket->tree);
 		node->in_tree = true;
 		dmap_hash_node_get(node);
+		atomic64_inc(&hash->nr_keys);
 	}
 	write_unlock(&bucket->lock);
 
@@ -196,6 +198,7 @@ static int dmap_hash_delete_node(struct dmap_hash *hash,
 	write_lock(&bucket->lock);
 	if (node->in_tree) {
 		rb_erase(&node->link, &bucket->tree);
+		atomic64_dec(&hash->nr_keys);
 		node->in_tree = false;
 		r = 0;
 	}

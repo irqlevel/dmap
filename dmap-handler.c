@@ -2,6 +2,7 @@
 #include "dmap-neighbor.h"
 #include "dmap-trace-helpers.h"
 #include "dmap-hash.h"
+#include "dmap-sha256.h"
 
 static int dmap_handle_hello(struct dmap *map, struct dmap_req_hello *req,
 			     struct dmap_resp_hello *resp)
@@ -75,11 +76,23 @@ static int dmap_handle_bye(struct dmap *map, struct dmap_req_bye *req,
 static int dmap_handle_set_key(struct dmap *map, struct dmap_req_set_key *req,
 			   struct dmap_resp_set_key *resp)
 {
+	unsigned char hash[32];
+	struct dmap_neighbor *neighbor;
 	int r;
 
-	r = dmap_hash_insert(&map->hash, req->key, sizeof(req->key),
-			     req->value, sizeof(req->value));
-	TRACE("set key: %16phN r: %d", req->key, r);
+	sha256(req->key, sizeof(req->key), hash);
+
+	neighbor = dmap_select_neighbor(map, hash);
+	if (WARN_ON(neighbor == NULL))
+		return -ENOTTY;
+
+	if (dmap_is_self_neighbor(map, neighbor))
+		r = dmap_hash_insert(&map->hash, req->key, sizeof(req->key),
+				req->value, sizeof(req->value));
+	else
+		r = dmap_neighbor_set_key(neighbor, req, resp);
+
+	TRACE("set key: %16phN r: %d", req->key, hash, r);
 
 	return r;
 }
@@ -87,11 +100,22 @@ static int dmap_handle_set_key(struct dmap *map, struct dmap_req_set_key *req,
 static int dmap_handle_get_key(struct dmap *map, struct dmap_req_get_key *req,
 			   struct dmap_resp_get_key *resp)
 {
+	struct dmap_neighbor *neighbor;
+	unsigned char hash[32];
 	int r;
 	size_t value_len;
 
-	r = dmap_hash_get(&map->hash, req->key, sizeof(req->key),
+	sha256(req->key, sizeof(req->key), hash);
+
+	neighbor = dmap_select_neighbor(map, hash);
+	if (WARN_ON(neighbor == NULL))
+		return -ENOTTY;
+
+	if (dmap_is_self_neighbor(map, neighbor))
+		r = dmap_hash_get(&map->hash, req->key, sizeof(req->key),
 			  resp->value, sizeof(resp->value), &value_len);
+	else
+		r = dmap_neighbor_get_key(neighbor, req, resp);
 
 	TRACE("get key: %16phN value: %16phN r: %d", req->key, resp->value);
 
@@ -102,9 +126,21 @@ static int dmap_handle_get_key(struct dmap *map, struct dmap_req_get_key *req,
 static int dmap_handle_del_key(struct dmap *map, struct dmap_req_del_key *req,
 			   struct dmap_resp_del_key *resp)
 {
+	struct dmap_neighbor *neighbor;
+	unsigned char hash[32];
 	int r;
 
-	r = dmap_hash_delete(&map->hash, req->key, sizeof(req->key));
+	sha256(req->key, sizeof(req->key), hash);
+
+	neighbor = dmap_select_neighbor(map, hash);
+	if (WARN_ON(neighbor == NULL))
+		return -ENOTTY;
+
+	if (dmap_is_self_neighbor(map, neighbor))
+		r = dmap_hash_delete(&map->hash, req->key, sizeof(req->key));
+	else
+		r = dmap_neighbor_del_key(neighbor, req, resp);
+
 	TRACE("del key: %16phN r: %d", req->key, r);
 
 	return r;

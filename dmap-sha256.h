@@ -13,13 +13,13 @@ struct sha256_context {
 	unsigned char opad[64];
 };
 
-void sha256_init(struct sha256_context *ctx)
+void sha256_init(struct sha256_context *ctx);
 
-void sha256_starts(struct sha256_context *ctx)
+void sha256_starts(struct sha256_context *ctx);
 
-void sha256_update(struct sha256_context *ctx, void *ibuf, size_t ilen)
+void sha256_update(struct sha256_context *ctx, void *ibuf, size_t ilen);
 
-void sha256_finish(struct sha256_context *ctx, unsigned char output[32])
+void sha256_finish(struct sha256_context *ctx, unsigned char output[32]);
 
 void sha256_free(struct sha256_context *ctx);
 
