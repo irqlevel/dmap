@@ -16,6 +16,7 @@ struct dmap_hash_node {
 	size_t value_len;
 	atomic_t ref_count;
 	bool in_tree;
+	rwlock_t lock;
 };
 
 struct dmap_hash_bucket {
@@ -34,6 +35,14 @@ void dmap_hash_deinit(struct dmap_hash *hash);
 
 int dmap_hash_insert(struct dmap_hash *hash, unsigned char *key, size_t key_len,
 		unsigned char *value, size_t value_len);
+
+int dmap_hash_update(struct dmap_hash *hash, unsigned char *key, size_t key_len,
+		unsigned char *value, size_t value_len);
+
+int dmap_hash_cmpxchg(struct dmap_hash *hash, unsigned char *key,
+		size_t key_len, unsigned char *exchange, size_t exchange_len,
+		unsigned char *comparand, size_t comparand_len,
+		unsigned char *value, size_t value_len, size_t *pvalue_len);
 
 int dmap_hash_get(struct dmap_hash *hash, unsigned char *key, size_t key_len,
 		unsigned char *value, size_t value_len, size_t *pvalue_len);

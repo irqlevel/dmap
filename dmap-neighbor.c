@@ -296,3 +296,83 @@ unlock:
 	mutex_unlock(&neighbor->mutex);
 	return r;
 }
+
+int dmap_neighbor_upd_key(struct dmap_neighbor *neighbor,
+			struct dmap_req_upd_key *req,
+			struct dmap_resp_upd_key *resp)
+{
+	struct dmap_req_upd_key *lreq =
+		(struct dmap_req_upd_key *)neighbor->request.body;
+	struct dmap_resp_upd_key *lresp =
+		(struct dmap_resp_upd_key *)neighbor->response.body;
+	int r;
+
+	mutex_lock(&neighbor->mutex);
+	if (neighbor->state != DMAP_NEIGHBOR_S_HELLO) {
+		r = -ENOTTY;
+		goto unlock;
+	}
+
+	r = dmap_neighbor_connect(neighbor);
+	if (r)
+		goto unlock;
+
+	memcpy(lreq, req, sizeof(*lreq));
+
+	r = dmap_con_send(&neighbor->con, DMAP_PACKET_UPD_KEY, sizeof(*lreq), 0,
+			  &neighbor->request);
+	if (r)
+		goto unlock;
+
+	r = dmap_con_recv_check(&neighbor->con, &neighbor->response,
+				DMAP_PACKET_UPD_KEY, sizeof(*lresp));
+	if (r)
+		goto unlock;
+
+	memcpy(resp, lresp, sizeof(*resp));
+
+unlock:
+	mutex_unlock(&neighbor->mutex);
+	return r;
+
+}
+
+int dmap_neighbor_cmpxchg_key(struct dmap_neighbor *neighbor,
+			struct dmap_req_cmpxchg_key *req,
+			struct dmap_resp_cmpxchg_key *resp)
+{
+	struct dmap_req_cmpxchg_key *lreq =
+		(struct dmap_req_cmpxchg_key *)neighbor->request.body;
+	struct dmap_resp_cmpxchg_key *lresp =
+		(struct dmap_resp_cmpxchg_key *)neighbor->response.body;
+	int r;
+
+	mutex_lock(&neighbor->mutex);
+	if (neighbor->state != DMAP_NEIGHBOR_S_HELLO) {
+		r = -ENOTTY;
+		goto unlock;
+	}
+
+	r = dmap_neighbor_connect(neighbor);
+	if (r)
+		goto unlock;
+
+	memcpy(lreq, req, sizeof(*lreq));
+
+	r = dmap_con_send(&neighbor->con, DMAP_PACKET_CMPXCHG_KEY,
+			  sizeof(*lreq), 0, &neighbor->request);
+	if (r)
+		goto unlock;
+
+	r = dmap_con_recv_check(&neighbor->con, &neighbor->response,
+				DMAP_PACKET_CMPXCHG_KEY, sizeof(*lresp));
+	if (r)
+		goto unlock;
+
+	memcpy(resp, lresp, sizeof(*resp));
+
+unlock:
+	mutex_unlock(&neighbor->mutex);
+	return r;
+
+}

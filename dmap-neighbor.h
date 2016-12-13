@@ -53,4 +53,12 @@ int dmap_neighbor_del_key(struct dmap_neighbor *neighbor,
 			struct dmap_req_del_key *req,
 			struct dmap_resp_del_key *resp);
 
+int dmap_neighbor_upd_key(struct dmap_neighbor *neighbor,
+			struct dmap_req_upd_key *req,
+			struct dmap_resp_upd_key *resp);
+
+int dmap_neighbor_cmpxchg_key(struct dmap_neighbor *neighbor,
+			struct dmap_req_cmpxchg_key *req,
+			struct dmap_resp_cmpxchg_key *resp);
+
 #endif

@@ -61,6 +61,7 @@ static struct dmap_hash_node *dmap_hash_node_create(
 		return NULL;
 
 	atomic_set(&node->ref_count, 1);
+	rwlock_init(&node->lock);
 
 	node->key = dmap_kmalloc(key_len, GFP_KERNEL);
 	if (!node->key)
@@ -231,6 +232,92 @@ int dmap_hash_insert(struct dmap_hash *hash, unsigned char *key, size_t key_len,
 	return r;
 }
 
+int dmap_hash_update(struct dmap_hash *hash, unsigned char *key, size_t key_len,
+		unsigned char *value, size_t value_len)
+{
+	struct dmap_hash_node *node;
+	void *new_value, *old_value;
+	int r;
+
+	if (key_len == 0 || key_len > DMAP_KEY_SIZE)
+		return -EINVAL;
+	if (value_len == 0 || value_len > DMAP_VALUE_SIZE)
+		return -EINVAL;
+
+	node = dmap_hash_lookup_node(hash, key, key_len);
+	if (!node)
+		return -ENOTTY;
+
+	new_value = dmap_kmalloc(value_len, GFP_KERNEL);
+	if (!new_value) {
+		r = -ENOMEM;
+		goto put_node;
+	}
+
+	memcpy(new_value, value, value_len);
+
+	write_lock(&node->lock);
+	old_value = node->value;
+	node->value = new_value;
+	node->value_len = value_len;
+	write_unlock(&node->lock);
+
+	dmap_kfree(old_value);
+	r = 0;
+
+put_node:
+	dmap_hash_node_put(node);
+	return r;
+}
+
+int dmap_hash_cmpxchg(struct dmap_hash *hash, unsigned char *key,
+		size_t key_len, unsigned char *exchange, size_t exchange_len,
+		unsigned char *comparand, size_t comparand_len,
+		unsigned char *value, size_t value_len, size_t *pvalue_len)
+{
+	struct dmap_hash_node *node;
+	int r;
+
+	if (key_len == 0 || key_len > DMAP_KEY_SIZE)
+		return -EINVAL;
+	if (value_len == 0 || value_len > DMAP_VALUE_SIZE)
+		return -EINVAL;
+	if (exchange_len == 0 || exchange_len > DMAP_VALUE_SIZE)
+		return -EINVAL;
+	if (comparand_len == 0 || comparand_len > DMAP_VALUE_SIZE)
+		return -EINVAL;
+
+	node = dmap_hash_lookup_node(hash, key, key_len);
+	if (!node)
+		return -ENOTTY;
+
+	write_lock(&node->lock);
+	if (comparand_len != node->value_len) {
+		r = -EINVAL;
+		goto unlock;
+	}
+
+	if (value_len < node->value_len) {
+		r = -EINVAL;
+		goto unlock;
+	}
+
+	memcpy(value, node->value, node->value_len);
+	*pvalue_len = node->value_len;
+
+	if (memcmp(node->value, comparand, node->value_len) == 0) {
+		memcpy(node->value, exchange, exchange_len);
+		node->value_len = exchange_len;
+	}
+	r = 0;
+
+unlock:
+	write_unlock(&node->lock);
+	dmap_hash_node_put(node);
+	return r;
+
+}
+
 int dmap_hash_get(struct dmap_hash *hash, unsigned char *key, size_t key_len,
 		unsigned char *value, size_t value_len, size_t *pvalue_len)
 {
@@ -246,16 +333,18 @@ int dmap_hash_get(struct dmap_hash *hash, unsigned char *key, size_t key_len,
 	if (!node)
 		return -ENOTTY;
 
+	read_lock(&node->lock);
 	if (node->value_len > value_len) {
 		r = -E2BIG;
-		goto put_node;
+		goto unlock_node;
 	}
 
 	memcpy(value, node->value, node->value_len);
 	*pvalue_len = node->value_len;
 	r = 0;
 
-put_node:
+unlock_node:
+	read_unlock(&node->lock);
 	dmap_hash_node_put(node);
 	return r;
 }

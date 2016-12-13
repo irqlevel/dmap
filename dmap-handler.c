@@ -146,6 +146,58 @@ static int dmap_handle_del_key(struct dmap *map, struct dmap_req_del_key *req,
 	return r;
 }
 
+static int dmap_handle_upd_key(struct dmap *map, struct dmap_req_upd_key *req,
+			   struct dmap_resp_upd_key *resp)
+{
+	unsigned char hash[32];
+	struct dmap_neighbor *neighbor;
+	int r;
+
+	sha256(req->key, sizeof(req->key), hash);
+
+	neighbor = dmap_select_neighbor(map, hash);
+	if (WARN_ON(neighbor == NULL))
+		return -ENOTTY;
+
+	if (dmap_is_self_neighbor(map, neighbor))
+		r = dmap_hash_update(&map->hash, req->key, sizeof(req->key),
+				req->value, sizeof(req->value));
+	else
+		r = dmap_neighbor_upd_key(neighbor, req, resp);
+
+	TRACE("update key: %16phN r: %d", req->key, hash, r);
+
+	return r;
+}
+
+static int dmap_handle_cmpxchg_key(struct dmap *map,
+				struct dmap_req_cmpxchg_key *req,
+				struct dmap_resp_cmpxchg_key *resp)
+{
+	unsigned char hash[32];
+	struct dmap_neighbor *neighbor;
+	size_t value_len;
+	int r;
+
+	sha256(req->key, sizeof(req->key), hash);
+
+	neighbor = dmap_select_neighbor(map, hash);
+	if (WARN_ON(neighbor == NULL))
+		return -ENOTTY;
+
+	if (dmap_is_self_neighbor(map, neighbor))
+		r = dmap_hash_cmpxchg(&map->hash, req->key, sizeof(req->key),
+				req->exchange, sizeof(req->exchange),
+				req->comparand, sizeof(req->comparand),
+				resp->value, sizeof(resp->value), &value_len);
+	else
+		r = dmap_neighbor_cmpxchg_key(neighbor, req, resp);
+
+	TRACE("cmpxchg key: %16phN r: %d", req->key, hash, r);
+
+	return r;
+}
+
 int dmap_handle_request(struct dmap *map, u32 type, void *req_body, u32 req_len,
 			void *resp_body, u32 *resp_len)
 {
@@ -232,6 +284,34 @@ int dmap_handle_request(struct dmap *map, u32 type, void *req_body, u32 req_len,
 		}
 
 		r = dmap_handle_del_key(map, req, resp);
+
+		*resp_len = sizeof(*resp);
+		break;
+	}
+	case DMAP_PACKET_UPD_KEY: {
+		struct dmap_req_upd_key *req = req_body;
+		struct dmap_resp_upd_key *resp = resp_body;
+
+		if (req_len != sizeof(*req)) {
+			r = -EINVAL;
+			break;
+		}
+
+		r = dmap_handle_upd_key(map, req, resp);
+
+		*resp_len = sizeof(*resp);
+		break;
+	}
+	case DMAP_PACKET_CMPXCHG_KEY: {
+		struct dmap_req_cmpxchg_key *req = req_body;
+		struct dmap_resp_cmpxchg_key *resp = resp_body;
+
+		if (req_len != sizeof(*req)) {
+			r = -EINVAL;
+			break;
+		}
+
+		r = dmap_handle_cmpxchg_key(map, req, resp);
 
 		*resp_len = sizeof(*resp);
 		break;

@@ -4,16 +4,18 @@
 #include "dmap-const.h"
 #include <linux/mutex.h>
 
-#define DMAP_PACKET_MAGIC	0xCBEECBEE
+#define DMAP_PACKET_MAGIC		0xCBEECBEE
 
-#define DMAP_PACKET_BODY_SIZE	65520
+#define DMAP_PACKET_BODY_SIZE		65520
 
-#define DMAP_PACKET_SET_KEY	1
-#define DMAP_PACKET_GET_KEY	2
-#define DMAP_PACKET_DEL_KEY	3
-#define DMAP_PACKET_HELLO	4
-#define DMAP_PACKET_PING	5
-#define DMAP_PACKET_BYE		6
+#define DMAP_PACKET_HELLO		1
+#define DMAP_PACKET_PING		2
+#define DMAP_PACKET_BYE			3
+#define DMAP_PACKET_SET_KEY		4
+#define DMAP_PACKET_GET_KEY		5
+#define DMAP_PACKET_DEL_KEY		6
+#define DMAP_PACKET_UPD_KEY		7
+#define DMAP_PACKET_CMPXCHG_KEY		8
 
 struct dmap_packet_header {
 	__le32 magic;
@@ -50,6 +52,25 @@ struct dmap_req_del_key {
 
 struct dmap_resp_del_key {
 	__le64 padding;
+};
+
+struct dmap_req_upd_key {
+	unsigned char key[DMAP_KEY_SIZE];
+	unsigned char value[DMAP_VALUE_SIZE];
+};
+
+struct dmap_resp_upd_key {
+	__le64 padding;
+};
+
+struct dmap_req_cmpxchg_key {
+	unsigned char key[DMAP_KEY_SIZE];
+	unsigned char exchange[DMAP_VALUE_SIZE];
+	unsigned char comparand[DMAP_VALUE_SIZE];
+};
+
+struct dmap_resp_cmpxchg_key {
+	unsigned char value[DMAP_VALUE_SIZE];
 };
 
 struct dmap_req_hello {

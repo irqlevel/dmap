@@ -1,24 +1,36 @@
 ### dmap - distributed key-value memory cache
 
+#### Client:
+[go client](https://github.com/irqlevel/dmap-client-go)
+
 #### Build:
 ```sh
 $ make
-$ go build dmap_client.go
 ```
 
-#### Usage:
+#### Install:
 ```sh
 $ sudo insmod dmap.ko #load kernel module on each node in cluster
 
 $ echo hostname port | sudo tee /sys/fs/dmap/start_server #start server on each node in cluster
 
 $ echo hostname port | sudo tee /sys/fs/dmap/add_neighbor #add node into cluster
+```
 
-$ ./dmap_client hostname:port set key value #add key-value
+#### Usage:
+```sh
+$ ./dmap-client hostname:port set key value #add key-value
 
-$ ./dmap_client hostname:port get key #query value by key
+$ ./dmap-client hostname:port get key #query value by key
 
-$ ./dmap_client hostname:port del key #delete key
+$ ./dmap-client hostname:port upd key value #update key value
 
-$ rmmod dmap #unload dmap
+$ ./dmap-client hostname:post cmpxchg key exchange comparand #compare exchange key value
+
+$ ./dmap-client hostname:port del key #delete key
+```
+
+#### Uninstall:
+```sh
+$ rmmod dmap #unload dmap on each node in cluster
 ```
