@@ -34,7 +34,7 @@ def run(cmd, user, password, key, verbose, nodes):
             for m in nodes:
                 if n != m:
                     s = ssh(log, n, user, password=password, key_file=key)
-                    s.cmd("echo " + m + " 8111 | sudo tee /sys/fs/dmap/add_neighbor")
+                    s.cmd("echo " + m + " 8111 | sudo tee /sys/fs/dmap/add_neighbor", throw=False)
         for n in nodes:
             s = ssh(log, n, user, password=password, key_file=key)
             s.cmd("sudo cat /sys/fs/dmap/neighbors")
@@ -57,6 +57,12 @@ def run(cmd, user, password, key, verbose, nodes):
         for n in nodes:
             s = ssh(log, n, user, password=password, key_file=key)
             s.cmd("sudo cat /sys/kernel/debug/tracing/trace")
+    elif cmd == "node-info":
+        for n in nodes:
+            s = ssh(log, n, user, password=password, key_file=key)
+            s.cmd("sudo cat /sys/fs/dmap/id")
+            s.cmd("sudo cat /sys/fs/dmap/nr_keys")
+            s.cmd("sudo cat /sys/fs/dmap/neighbors")
     else:
         raise Exception("Unknown cmd %s", cmd)
 
