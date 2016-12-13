@@ -9,5 +9,6 @@ temp/
 *.patch
 *.swp
 *.out
+*.pyc
 tags
 dmap-client
