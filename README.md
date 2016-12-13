@@ -21,6 +21,12 @@ $ echo hostname port | sudo tee /sys/fs/dmap/add_neighbor #add node into cluster
 ```sh
 $ ./dmap-client hostname:port set key value #add key-value
 
+$ cat /sys/fs/dmap/id #query node UID
+
+$ cat /sys/fs/dmap/neighbors #query nodes in cluster
+
+$ ./dmap-client hostname:port set key value #add key-value
+
 $ ./dmap-client hostname:port get key #query value by key
 
 $ ./dmap-client hostname:port upd key value #update key value
