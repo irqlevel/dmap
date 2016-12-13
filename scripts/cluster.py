@@ -63,6 +63,10 @@ def run(cmd, user, password, key, verbose, nodes):
             s.cmd("sudo cat /sys/fs/dmap/id")
             s.cmd("sudo cat /sys/fs/dmap/nr_keys")
             s.cmd("sudo cat /sys/fs/dmap/neighbors")
+    elif cmd == "dmesg":
+        for n in nodes:
+            s = ssh(log, n, user, password=password, key_file=key)
+            s.cmd("sudo dmesg | tail -n 20")
     else:
         raise Exception("Unknown cmd %s", cmd)
 
