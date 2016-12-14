@@ -29,7 +29,7 @@ $ ./dmap-client hostname:port get key #query value by key
 
 $ ./dmap-client hostname:port upd key value #update key value
 
-$ ./dmap-client hostname:post cmpxchg key exchange comparand #compare exchange key value
+$ ./dmap-client hostname:port cmpxchg key exchange comparand #compare exchange key value
 
 $ ./dmap-client hostname:port del key #delete key
 ```
